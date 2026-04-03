@@ -28,7 +28,7 @@ async function loadGraphData(): Promise<GraphData> {
   const key = `${ds}/${arch}`;
   if (cachedGraph && cachedKey === key) return cachedGraph;
 
-  const resp = await fetch(`/data/${ds}/${arch}/graph.json`);
+  const resp = await fetch(`data/${ds}/${arch}/graph.json`);
   if (!resp.ok) throw new Error("graph.json not found");
   cachedGraph = await resp.json();
   cachedKey = key;

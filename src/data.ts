@@ -184,11 +184,11 @@ export async function loadData(dataset?: "winsdk" | "phnt", arch?: string): Prom
   if (arch) currentArch = arch;
 
   // Try paths in order: data/{dataset}/{arch}/, data/{dataset}/, data/
-  let prefix = `/data/${currentDataset}/${currentArch}`;
+  let prefix = `data/${currentDataset}/${currentArch}`;
   if (!await dataPathExists(prefix)) {
-    prefix = `/data/${currentDataset}`;
+    prefix = `data/${currentDataset}`;
     if (!await dataPathExists(prefix)) {
-      prefix = "/data";
+      prefix = "data";
     }
   }
 
@@ -222,9 +222,9 @@ export async function getAvailableDatasets(): Promise<string[]> {
   for (const ds of ["winsdk", "phnt"]) {
     // Check for any arch subdir, or flat dataset dir
     for (const arch of ["amd64", "x86", "arm", "arm64"]) {
-      if (await dataPathExists(`/data/${ds}/${arch}`)) { datasets.push(ds); break; }
+      if (await dataPathExists(`data/${ds}/${arch}`)) { datasets.push(ds); break; }
     }
-    if (!datasets.includes(ds) && await dataPathExists(`/data/${ds}`)) datasets.push(ds);
+    if (!datasets.includes(ds) && await dataPathExists(`data/${ds}`)) datasets.push(ds);
   }
   if (datasets.length === 0) datasets.push("winsdk");
   return datasets;
@@ -234,7 +234,7 @@ export async function getAvailableArchs(dataset?: string): Promise<string[]> {
   const ds = dataset ?? currentDataset;
   const archs: string[] = [];
   for (const arch of ["amd64", "x86", "arm", "arm64"]) {
-    if (await dataPathExists(`/data/${ds}/${arch}`)) archs.push(arch);
+    if (await dataPathExists(`data/${ds}/${arch}`)) archs.push(arch);
   }
   if (archs.length === 0) archs.push("amd64");
   return archs;

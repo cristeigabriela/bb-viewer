@@ -281,11 +281,11 @@ async function loadData(dataset, arch) {
     currentDataset = dataset;
   if (arch)
     currentArch = arch;
-  let prefix = `/data/${currentDataset}/${currentArch}`;
+  let prefix = `data/${currentDataset}/${currentArch}`;
   if (!await dataPathExists(prefix)) {
-    prefix = `/data/${currentDataset}`;
+    prefix = `data/${currentDataset}`;
     if (!await dataPathExists(prefix)) {
-      prefix = "/data";
+      prefix = "data";
     }
   }
   const emptyFuncs = { command: "", functions: [] };
@@ -321,12 +321,12 @@ async function getAvailableDatasets() {
   const datasets = [];
   for (const ds of ["winsdk", "phnt"]) {
     for (const arch of ["amd64", "x86", "arm", "arm64"]) {
-      if (await dataPathExists(`/data/${ds}/${arch}`)) {
+      if (await dataPathExists(`data/${ds}/${arch}`)) {
         datasets.push(ds);
         break;
       }
     }
-    if (!datasets.includes(ds) && await dataPathExists(`/data/${ds}`))
+    if (!datasets.includes(ds) && await dataPathExists(`data/${ds}`))
       datasets.push(ds);
   }
   if (datasets.length === 0)
@@ -337,7 +337,7 @@ async function getAvailableArchs(dataset) {
   const ds = dataset ?? currentDataset;
   const archs = [];
   for (const arch of ["amd64", "x86", "arm", "arm64"]) {
-    if (await dataPathExists(`/data/${ds}/${arch}`))
+    if (await dataPathExists(`data/${ds}/${arch}`))
       archs.push(arch);
   }
   if (archs.length === 0)
@@ -2526,7 +2526,7 @@ async function loadGraphData() {
   const key = `${ds}/${arch}`;
   if (cachedGraph && cachedKey === key)
     return cachedGraph;
-  const resp = await fetch(`/data/${ds}/${arch}/graph.json`);
+  const resp = await fetch(`data/${ds}/${arch}/graph.json`);
   if (!resp.ok)
     throw new Error("graph.json not found");
   cachedGraph = await resp.json();
