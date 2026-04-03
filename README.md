@@ -1,5 +1,7 @@
 # bb viewer
 
+[**open the viewer**](https://cristeigabriela.github.io/bb-viewer/index.html)
+
 a terminal-themed web explorer for windows sdk and phnt header analysis data, produced by [bb](https://github.com/cristeigabriela/bb).
 
 browse 8,000+ functions with full abi layouts, 5,000+ types with memory visualizations, 25,000+ constants with c expressions, and an interactive type relationship graph — all from your browser.
