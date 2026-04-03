@@ -1,0 +1,22 @@
+/** Type tokens that are primitives/builtins and should not be treated as user-defined types */
+export const KNOWN_PRIMITIVES = new Set([
+  "void", "int", "char", "short", "long", "float", "double", "unsigned",
+  "signed", "const", "struct", "union", "enum", "volatile", "static",
+  "extern", "inline", "restrict", "register", "typedef", "return",
+  "__attribute__", "__stdcall", "__cdecl", "__fastcall", "VOID",
+  "__int64", "__int32", "__int16", "__int8", "wchar_t", "size_t",
+  "UCHAR", "USHORT", "ULONG", "ULONGLONG", "CHAR", "SHORT", "LONG",
+  "LONGLONG", "BOOLEAN", "BOOL", "BYTE", "WORD", "DWORD", "DWORDLONG",
+  "QWORD", "INT", "UINT", "FLOAT", "DOUBLE", "WCHAR", "PVOID", "LPVOID",
+  "LPCVOID", "HANDLE", "HRESULT", "NTSTATUS", "HMODULE", "HINSTANCE",
+  "HWND", "HDC", "HBITMAP", "HBRUSH", "HFONT", "HICON", "HMENU", "HPEN",
+  "HRGN", "HPALETTE", "HKEY", "HMONITOR", "HGLOBAL", "HLOCAL",
+  "SIZE_T", "SSIZE_T", "ULONG_PTR", "LONG_PTR", "DWORD_PTR", "UINT_PTR",
+  "INT_PTR", "WPARAM", "LPARAM", "LRESULT", "ATOM", "COLORREF",
+  "LCID", "LANGID", "LPSTR", "LPCSTR", "LPWSTR", "LPCWSTR",
+  "BSTR", "VARIANT_BOOL", "SCODE", "DISPID", "MEMBERID",
+  "LARGE_INTEGER", "ULARGE_INTEGER", "LUID",
+  "PUCHAR", "PUSHORT", "PULONG", "PCHAR", "PSHORT", "PLONG",
+  "PBOOL", "PBYTE", "PWORD", "PDWORD", "PFLOAT", "PDOUBLE",
+  "LPBOOL", "LPBYTE", "LPWORD", "LPDWORD",
+]);

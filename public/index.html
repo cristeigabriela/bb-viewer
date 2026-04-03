@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>bb viewer</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@arborium/arborium@2/dist/arborium.iife.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
+</head>
+<body>
+  <div id="loading">
+    <div class="loader">
+      <div class="loader-spinner"></div>
+      <p>Loading Windows SDK data...</p>
+      <p class="dim">Parsing entries...</p>
+    </div>
+  </div>
+
+  <div id="app" style="display:none">
+    <nav class="top-nav">
+      <a href="#/" class="nav-brand">bb</a>
+      <div class="nav-links">
+        <a href="#/" class="nav-link" data-view="home">Home</a>
+        <a href="#/functions" class="nav-link" data-view="functions">Functions</a>
+        <a href="#/types" class="nav-link" data-view="types">Types</a>
+        <a href="#/constants" class="nav-link" data-view="constants">Constants</a>
+      </div>
+      <div class="dataset-switcher">
+        <button class="dataset-btn active" data-dataset="winsdk">Windows SDK</button>
+        <button class="dataset-btn" data-dataset="phnt">PHNT</button>
+      </div>
+      <div class="arch-switcher"></div>
+      <div class="theme-controls">
+        <div class="accent-picker" title="Accent color">
+          <button class="accent-swatch active" data-accent="amber" style="background:#ffb000"></button>
+          <button class="accent-swatch" data-accent="green" style="background:#33ff33"></button>
+          <button class="accent-swatch" data-accent="cyan" style="background:#00e5ff"></button>
+          <button class="accent-swatch" data-accent="red" style="background:#ff4444"></button>
+          <button class="accent-swatch" data-accent="white" style="background:#cccccc"></button>
+        </div>
+        <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode"></button>
+      </div>
+      <div class="search-trigger" id="global-search" tabindex="0">
+        <span class="search-trigger-text">search ( / )</span>
+      </div>
+    </nav>
+    <main id="content"></main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

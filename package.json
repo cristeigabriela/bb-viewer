@@ -1,0 +1,12 @@
+{
+  "name": "bb-viewer",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "bun run build.ts",
+    "build:graph": "bun run build-graph.ts",
+    "dev": "bun run serve.ts"
+  },
+  "dependencies": {
+    "d3-force": "^3.0.0"
+  }
+}
