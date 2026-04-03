@@ -1,6 +1,6 @@
 # bb viewer
 
-[**open the viewer**](https://cristeigabriela.github.io/bb-viewer/public/index.html)
+[**open the viewer**](https://cristeigabriela.github.io/bb-viewer/index.html)
 
 a terminal-themed web explorer for windows sdk and phnt header analysis data, produced by [bb](https://github.com/cristeigabriela/bb).
 
