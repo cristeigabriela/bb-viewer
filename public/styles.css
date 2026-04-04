@@ -92,6 +92,7 @@ body {
   color: var(--text);
   line-height: 1.5;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
@@ -137,6 +138,13 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 }
 .nav-link:hover { color: var(--text) !important; background: var(--bg-hover); border-color: var(--border); }
 .nav-link.active { color: var(--accent) !important; border-color: var(--accent); background: var(--accent-dim); }
+
+/* ── GitHub link ── */
+.github-link {
+  color: var(--text-dim) !important; display: flex; align-items: center;
+  transition: color var(--transition); text-decoration: none !important;
+}
+.github-link:hover { color: var(--text) !important; }
 
 /* ── Theme controls ── */
 .theme-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
@@ -684,6 +692,14 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 /* ── Not Found ── */
 .not-found { text-align: center; padding: 40px; }
 .not-found h2 { color: var(--val-red); }
+.suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 20px; }
+.suggestion-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--border); background: var(--bg-card); }
+.suggestion-chip .xref { font-weight: 600; }
+
+/* ── Lookup Results ── */
+.lookup-results { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.lookup-result-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border-light); background: var(--bg-card); }
+.lookup-result-item:hover { border-color: var(--accent); }
 
 /* ── Helpers ── */
 .mono { font-family: var(--font); }
@@ -692,6 +708,12 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 .type-str { color: var(--accent); }
 
 /* ── Responsive ── */
+@media (max-width: 1100px) {
+  .top-nav { flex-wrap: wrap; height: auto; gap: 8px; padding: 8px 16px; }
+  .theme-controls { margin-left: 0; }
+  .search-trigger { margin-left: auto; }
+}
+
 @media (max-width: 768px) {
   .top-nav { padding: 6px 10px; gap: 8px; flex-wrap: wrap; height: auto; }
   .nav-links { gap: 1px; }
@@ -707,8 +729,9 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
   .item-header { gap: 4px; }
   .item-info { margin-left: 0; }
   .func-signature { font-size: 0.78rem; padding: 8px; }
-  .data-table { font-size: 0.72rem; }
+  .data-table { font-size: 0.72rem; min-width: 500px; }
   .data-table th, .data-table td { padding: 3px 5px; }
+  .section-body { overflow-x: auto; }
   .abi-slot { flex-wrap: wrap; gap: 4px; }
   .abi-reg-badge, .abi-stack-badge, .abi-indirect-badge { width: 72px; font-size: 0.72rem; }
   .theme-controls { margin-left: 0; }

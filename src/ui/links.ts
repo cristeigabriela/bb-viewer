@@ -1,4 +1,5 @@
 import { canonicalTypeName } from "../data";
+import { buildHash } from "../router";
 import { el } from "../dom";
 
 /** Create a type link, resolving aliases (LP*, P*, _prefix) */
@@ -6,26 +7,26 @@ export function typeLink(name: string, displayName?: string): HTMLElement {
   const canonical = canonicalTypeName(name) ?? name;
   return el("a", {
     className: "xref xref-type",
-    href: `#/types/${encodeURIComponent(canonical)}`
+    href: buildHash("/types/" + encodeURIComponent(canonical))
   }, displayName ?? name);
 }
 
 export function funcLink(name: string): HTMLElement {
-  return el("a", { className: "xref xref-func", href: `#/functions/${encodeURIComponent(name)}` }, name);
+  return el("a", { className: "xref xref-func", href: buildHash("/functions/" + encodeURIComponent(name)) }, name);
 }
 
 export function constLink(name: string): HTMLElement {
-  return el("a", { className: "xref xref-const", href: `#/constants/${encodeURIComponent(name)}` }, name);
+  return el("a", { className: "xref xref-const", href: buildHash("/constants/" + encodeURIComponent(name)) }, name);
 }
 
 export function enumLink(name: string): HTMLElement {
-  return el("a", { className: "xref xref-enum", href: `#/constants/enum/${encodeURIComponent(name)}` }, name);
+  return el("a", { className: "xref xref-enum", href: buildHash("/constants/enum/" + encodeURIComponent(name)) }, name);
 }
 
 export function headerLink(header: string, view: string = "functions"): HTMLElement {
   return el("a", {
     className: "xref xref-header",
-    href: `#/${view}?header=${encodeURIComponent(header)}`
+    href: buildHash("/" + view + "?header=" + encodeURIComponent(header))
   }, header);
 }
 

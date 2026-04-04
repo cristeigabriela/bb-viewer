@@ -152,7 +152,7 @@ export function renderHome(container: Element): void {
 
   // Stats row
   const statsRow = el("div", { className: "stats-row" });
-  const exported = funcs.filter(f => f.is_exported).length;
+  const exported = funcs.filter(f => f.is_dllimport).length;
   const withMeta = funcs.filter(f => f.metadata).length;
   const withFields = types.filter(t => t.fields.length > 0).length;
   const withComponents = consts.filter(c => c.components && c.components.length > 0).length;

@@ -2,7 +2,7 @@ import { searchAll, findFunc, findType, findConst, findEnum } from "./data";
 import { el, clear } from "./dom";
 import { badge, renderTypeStr } from "./ui/links";
 import { debounce } from "./utils";
-import { navigate } from "./router";
+import { navigate, buildHash } from "./router";
 
 let overlay: HTMLElement;
 let input: HTMLInputElement;
@@ -14,11 +14,11 @@ let previewTimer: ReturnType<typeof setTimeout> | null = null;
 
 function getHref(item: { kind: string; name: string }): string {
   switch (item.kind) {
-    case "function": return `#/functions/${encodeURIComponent(item.name)}`;
-    case "type": return `#/types/${encodeURIComponent(item.name)}`;
-    case "constant": return `#/constants/${encodeURIComponent(item.name)}`;
-    case "enum": return `#/constants/enum/${encodeURIComponent(item.name)}`;
-    default: return "#/";
+    case "function": return buildHash(`/functions/${encodeURIComponent(item.name)}`);
+    case "type": return buildHash(`/types/${encodeURIComponent(item.name)}`);
+    case "constant": return buildHash(`/constants/${encodeURIComponent(item.name)}`);
+    case "enum": return buildHash(`/constants/enum/${encodeURIComponent(item.name)}`);
+    default: return buildHash("/");
   }
 }
 
@@ -160,11 +160,12 @@ function getShortcuts(): Array<{ kind: string; name: string; href: string }> {
   const shortcuts: Array<{ kind: string; name: string; href: string }> = [];
   for (const link of document.querySelectorAll(".nav-link")) {
     const text = link.textContent?.trim().toLowerCase() ?? "";
-    const href = link.getAttribute("href") ?? "#/";
+    const rawHref = link.getAttribute("href") ?? "#/";
+    const href = buildHash(rawHref.replace(/^#/, ""));
     if (text) shortcuts.push({ kind: "page", name: text, href });
   }
   // Subtab pages not in the navbar
-  shortcuts.push({ kind: "page", name: "type graph", href: "#/types/graph" });
+  shortcuts.push({ kind: "page", name: "type graph", href: buildHash("/types/graph") });
   return shortcuts;
 }
 

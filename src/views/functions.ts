@@ -1,9 +1,10 @@
-import { getFunctions, findFunc, hasConst, findType, getAllHeaders, cleanDll } from "../data";
+import { getFunctions, findFunc, findSimilarNames, hasConst, findType, getAllHeaders, cleanDll } from "../data";
 import { el, clear } from "../dom";
 import { matchQuery } from "../utils";
 import { typeLink, constLink, renderTypeStr, headerLink, badge } from "../ui/links";
+import { buildHash, navigate } from "../router";
 import { buildFilterDropdown, FilterDropdownHandle } from "../ui/filter-dropdown";
-import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination } from "./shared";
+import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl } from "./shared";
 import type { Func, Param } from "../types";
 
 const PAGE_SIZE = 50;
@@ -143,7 +144,7 @@ function renderFuncDetailView(fn: Func): HTMLElement {
       const cleaned = cleanDll(fn.metadata.dll);
       const dllRow = el("div", {});
       dllRow.appendChild(el("strong", {}, "DLL: "));
-      dllRow.appendChild(el("a", { href: `#/functions?dll=${encodeURIComponent(cleaned)}`, className: "xref" }, cleaned));
+      dllRow.appendChild(el("a", { href: buildHash(`/functions?dll=${encodeURIComponent(cleaned)}`), className: "xref" }, cleaned));
       grid.appendChild(dllRow);
     }
     if (fn.metadata.lib) grid.appendChild(el("div", {}, el("strong", {}, "Lib: "), document.createTextNode(fn.metadata.lib)));
@@ -204,27 +205,43 @@ function renderFuncDetailView(fn: Func): HTMLElement {
 export function renderFunctionsList(container: Element, query: Record<string, string> = {}): void {
   clear(container);
 
-  const hasQueryOverride = !!(query.header || query.dll || query.q || query.minParams || query.maxParams || query.ptrDepth || query.minClient || query.minServer);
-  let filterExported: "all" | "yes" | "no" = hasQueryOverride ? "all" : "yes";
-  const filterHeaders = new Set<string>();
-  const filterReturnTypes = new Set<string>();
-  const filterDlls = new Set<string>();
+  const hasQueryOverride = !!(query.header || query.dll || query.q || query.returnType || query.minParams || query.maxParams || query.ptrDepth || query.minClient || query.minServer || query.exported);
+  let filterExported: "all" | "yes" | "no" = query.exported as any ?? (hasQueryOverride ? "all" : "yes");
+  const filterHeaders = new Set<string>(query.header ? query.header.split(",") : []);
+  const filterReturnTypes = new Set<string>(query.returnType ? query.returnType.split(",") : []);
+  const filterDlls = new Set<string>(query.dll ? query.dll.split(",") : []);
   let filterMinParams = parseInt(query.minParams ?? "") || 0;
   let filterMaxParams = parseInt(query.maxParams ?? "") || Infinity;
   let filterPointerDepth = parseInt(query.ptrDepth ?? "") || -1;
   let filterMinClient = query.minClient ?? "";
   let filterMinServer = query.minServer ?? "";
-  let page = 0;
+  let page = parseInt(query.page ?? "") || 0;
   let searchQuery = query.q ?? "";
-  let useRegex = false;
-
-  if (query.header) filterHeaders.add(query.header);
-  if (query.dll) filterDlls.add(query.dll);
-  if (query.returnType) filterReturnTypes.add(query.returnType);
+  let useRegex = query.regex === "1";
 
   let headerDropdown: FilterDropdownHandle;
   let returnTypeDropdown: FilterDropdownHandle;
   let dllDropdown: FilterDropdownHandle;
+
+  function syncUrl() {
+    const s = sort?.getState();
+    syncViewUrl("/functions", {
+      q: searchQuery,
+      regex: useRegex ? "1" : "",
+      header: [...filterHeaders].join(","),
+      dll: [...filterDlls].join(","),
+      returnType: [...filterReturnTypes].join(","),
+      exported: filterExported !== "yes" ? filterExported : "",
+      minParams: filterMinParams > 0 ? String(filterMinParams) : "",
+      maxParams: filterMaxParams < Infinity ? String(filterMaxParams) : "",
+      ptrDepth: filterPointerDepth >= 0 ? String(filterPointerDepth) : "",
+      minClient: filterMinClient,
+      minServer: filterMinServer,
+      sort: s && s.sortBy !== "name" ? s.sortBy : "",
+      sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
+      page: page > 0 ? String(page) : "",
+    });
+  }
 
   const pg = el("div", { className: "list-view" });
   pg.appendChild(el("div", { className: "title-row" }, el("h2", {}, "Functions")));
@@ -238,6 +255,7 @@ export function renderFunctionsList(container: Element, query: Record<string, st
     dllDropdown?.refresh();
     rebuildChips();
     renderList();
+    syncUrl();
   }
 
   function rebuildChips() {
@@ -266,8 +284,8 @@ export function renderFunctionsList(container: Element, query: Record<string, st
   const controls = el("div", { className: "controls" });
 
   const search = buildSearchInput("Search by name (glob: *File*, Nt?lose*)...", (q, re) => {
-    searchQuery = q; useRegex = re; page = 0; renderList();
-  }, searchQuery);
+    searchQuery = q; useRegex = re; page = 0; renderList(); syncUrl();
+  }, searchQuery, useRegex);
   controls.appendChild(search.element);
 
   const exportSel = el("select", { className: "filter-select" }) as HTMLSelectElement;
@@ -276,7 +294,7 @@ export function renderFunctionsList(container: Element, query: Record<string, st
     if (val === filterExported) opt.selected = true;
     exportSel.appendChild(opt);
   }
-  exportSel.addEventListener("change", () => { filterExported = exportSel.value as any; page = 0; renderList(); });
+  exportSel.addEventListener("change", () => { filterExported = exportSel.value as any; page = 0; renderList(); syncUrl(); });
   controls.appendChild(exportSel);
 
   headerDropdown = buildFilterDropdown("Filter by Header", getAllHeaders(), filterHeaders, () => { page = 0; refreshAll(); });
@@ -292,7 +310,9 @@ export function renderFunctionsList(container: Element, query: Record<string, st
 
   pg.appendChild(controls);
 
-  const sort = buildSortRow([["name", "Name"], ["params", "Params"]], { sortBy: "name", sortDir: "asc" }, () => { page = 0; renderList(); });
+  const initSort = query.sort ?? "name";
+  const initSortDir = (query.sortDir ?? "asc") as "asc" | "desc";
+  const sort = buildSortRow([["name", "Name"], ["params", "Params"]], { sortBy: initSort, sortDir: initSortDir }, () => { page = 0; renderList(); syncUrl(); });
   pg.appendChild(sort.element);
 
   const listContainer = el("div", { className: "list-container" });
@@ -337,7 +357,7 @@ export function renderFunctionsList(container: Element, query: Record<string, st
     for (const fn of pageItems) {
       const row = el("div", { className: "list-item func-item" });
       const header = el("div", { className: "item-header" });
-      header.appendChild(el("a", { className: "item-name", href: `#/functions/${encodeURIComponent(fn.name)}` }, fn.name));
+      header.appendChild(el("a", { className: "item-name", href: buildHash(`/functions/${encodeURIComponent(fn.name)}`) }, fn.name));
       const retSpan = el("span", { className: "item-ret" });
       retSpan.appendChild(renderTypeStr(fn.return_type));
       header.appendChild(retSpan);
@@ -357,7 +377,7 @@ export function renderFunctionsList(container: Element, query: Record<string, st
     }
 
     renderPagination(pagContainer, page, totalPages, (p) => {
-      page = p; renderList();
+      page = p; renderList(); syncUrl();
       listContainer.scrollIntoView({ behavior: "smooth" });
     });
   }
@@ -367,11 +387,12 @@ export function renderFunctionsList(container: Element, query: Record<string, st
 
 export function renderFunctionDetail(container: Element, name: string): void {
   clear(container);
+  if (name.includes("*") || name.includes("?")) { navigate(`/functions?q=${encodeURIComponent(name)}`); return; }
   const fn = findFunc(name);
-  if (!fn) { renderNotFound(container, "Function", name, "#/functions", "All functions"); return; }
+  if (!fn) { renderNotFound(container, "Function", name, buildHash("/functions"), "All functions", findSimilarNames(name)); return; }
 
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: "#/functions", className: "back-link" }, "\u2190 All functions"));
+  pg.appendChild(el("a", { href: buildHash("/functions"), className: "back-link" }, "\u2190 All functions"));
   pg.appendChild(el("h2", {}, fn.name));
   pg.appendChild(renderFuncDetailView(fn));
   container.appendChild(pg);

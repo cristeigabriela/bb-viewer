@@ -1,9 +1,11 @@
-import { getTypes, findType, getXRef, getAllHeaders } from "../data";
+import { getTypes, findType, flexFindType, findSimilarNames, getXRef, getAllHeaders } from "../data";
+import { navigate } from "../router";
 import { el, clear } from "../dom";
 import { matchQuery } from "../utils";
 import { typeLink, funcLink, renderTypeStr, headerLink, badge, highlightCode } from "../ui/links";
+import { buildHash } from "../router";
 import { buildFilterDropdown, FilterDropdownHandle } from "../ui/filter-dropdown";
-import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination } from "./shared";
+import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl } from "./shared";
 import type { TypeDef, Field } from "../types";
 
 const PAGE_SIZE = 50;
@@ -151,21 +153,35 @@ function renderMemoryLayout(td: TypeDef): HTMLElement {
 export function renderTypesList(container: Element, query: Record<string, string> = {}): void {
   clear(container);
 
-  const filterHeaders = new Set<string>();
-  if (query.header) filterHeaders.add(query.header);
+  const filterHeaders = new Set<string>(query.header ? query.header.split(",") : []);
   let filterMinSize = parseInt(query.minSize ?? "") || 0;
   let filterMaxSize = parseInt(query.maxSize ?? "") || Infinity;
-  let filterHasFields: "all" | "yes" | "no" = "all";
-  let page = 0;
+  let filterHasFields: "all" | "yes" | "no" = (query.hasFields as any) ?? "all";
+  let page = parseInt(query.page ?? "") || 0;
   let searchQuery = query.q ?? "";
-  let useRegex = false;
+  let useRegex = query.regex === "1";
   let headerDropdown: FilterDropdownHandle;
+
+  function syncUrl() {
+    const s = sort?.getState();
+    syncViewUrl("/types", {
+      q: searchQuery,
+      regex: useRegex ? "1" : "",
+      header: [...filterHeaders].join(","),
+      minSize: filterMinSize > 0 ? String(filterMinSize) : "",
+      maxSize: filterMaxSize < Infinity ? String(filterMaxSize) : "",
+      hasFields: filterHasFields !== "all" ? filterHasFields : "",
+      sort: s && s.sortBy !== "name" ? s.sortBy : "",
+      sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
+      page: page > 0 ? String(page) : "",
+    });
+  }
 
   const pg = el("div", { className: "list-view" });
 
   const tabRow = el("div", { className: "tabs" });
   tabRow.appendChild(el("button", { className: "tab-btn active" }, "list"));
-  tabRow.appendChild(el("a", { href: "#/types/graph", className: "tab-btn" }, "graph"));
+  tabRow.appendChild(el("a", { href: buildHash("/types/graph"), className: "tab-btn" }, "graph"));
   pg.appendChild(tabRow);
 
   pg.appendChild(el("div", { className: "title-row" }, el("h2", {}, "Types")));
@@ -177,6 +193,7 @@ export function renderTypesList(container: Element, query: Record<string, string
     headerDropdown?.refresh();
     rebuildChips();
     renderList();
+    syncUrl();
   }
 
   function rebuildChips() {
@@ -192,8 +209,8 @@ export function renderTypesList(container: Element, query: Record<string, string
 
   const controls = el("div", { className: "controls" });
   const search = buildSearchInput("Search types (glob: _GUID, *INFO*)...", (q, re) => {
-    searchQuery = q; useRegex = re; page = 0; renderList();
-  }, searchQuery);
+    searchQuery = q; useRegex = re; page = 0; renderList(); syncUrl();
+  }, searchQuery, useRegex);
   controls.appendChild(search.element);
 
   headerDropdown = buildFilterDropdown("Filter by Header", getAllHeaders(), filterHeaders, () => { page = 0; refreshAll(); });
@@ -201,11 +218,11 @@ export function renderTypesList(container: Element, query: Record<string, string
 
   const sizeMin = el("input", { type: "number", placeholder: "Min size", className: "filter-input size-filter" }) as HTMLInputElement;
   if (filterMinSize > 0) sizeMin.value = String(filterMinSize);
-  sizeMin.addEventListener("input", () => { filterMinSize = parseInt(sizeMin.value) || 0; page = 0; rebuildChips(); renderList(); });
+  sizeMin.addEventListener("input", () => { filterMinSize = parseInt(sizeMin.value) || 0; page = 0; rebuildChips(); renderList(); syncUrl(); });
 
   const sizeMax = el("input", { type: "number", placeholder: "Max size", className: "filter-input size-filter" }) as HTMLInputElement;
   if (filterMaxSize < Infinity) sizeMax.value = String(filterMaxSize);
-  sizeMax.addEventListener("input", () => { filterMaxSize = parseInt(sizeMax.value) || Infinity; page = 0; rebuildChips(); renderList(); });
+  sizeMax.addEventListener("input", () => { filterMaxSize = parseInt(sizeMax.value) || Infinity; page = 0; rebuildChips(); renderList(); syncUrl(); });
 
   controls.appendChild(sizeMin); controls.appendChild(sizeMax);
 
@@ -215,11 +232,13 @@ export function renderTypesList(container: Element, query: Record<string, string
     if (v === filterHasFields) opt.selected = true;
     fieldsSel.appendChild(opt);
   }
-  fieldsSel.addEventListener("change", () => { filterHasFields = fieldsSel.value as any; page = 0; renderList(); });
+  fieldsSel.addEventListener("change", () => { filterHasFields = fieldsSel.value as any; page = 0; renderList(); syncUrl(); });
   controls.appendChild(fieldsSel);
   pg.appendChild(controls);
 
-  const sort = buildSortRow([["name", "Name"], ["size", "Size"], ["fields", "Fields"]], { sortBy: "name", sortDir: "asc" }, () => { page = 0; renderList(); });
+  const initSort = query.sort ?? "name";
+  const initSortDir = (query.sortDir ?? "asc") as "asc" | "desc";
+  const sort = buildSortRow([["name", "Name"], ["size", "Size"], ["fields", "Fields"]], { sortBy: initSort, sortDir: initSortDir }, () => { page = 0; renderList(); syncUrl(); });
   pg.appendChild(sort.element);
 
   const listContainer = el("div", { className: "list-container" });
@@ -259,7 +278,7 @@ export function renderTypesList(container: Element, query: Record<string, string
     for (const td of pageItems) {
       const row = el("div", { className: "list-item type-item" });
       const header = el("div", { className: "item-header" });
-      header.appendChild(el("a", { className: "item-name", href: `#/types/${encodeURIComponent(td.name)}` }, td.name));
+      header.appendChild(el("a", { className: "item-name", href: buildHash(`/types/${encodeURIComponent(td.name)}`) }, td.name));
       const info = el("span", { className: "item-info" });
       if (td.size !== null) info.appendChild(badge(`${td.size}B`, "tag-size"));
       else info.appendChild(badge("opaque", "tag-opaque"));
@@ -279,7 +298,7 @@ export function renderTypesList(container: Element, query: Record<string, string
       }
       listContainer.appendChild(row);
     }
-    renderPagination(pagContainer, page, totalPages, (p) => { page = p; renderList(); listContainer.scrollIntoView({ behavior: "smooth" }); });
+    renderPagination(pagContainer, page, totalPages, (p) => { page = p; renderList(); syncUrl(); listContainer.scrollIntoView({ behavior: "smooth" }); });
   }
 
   renderList();
@@ -287,11 +306,14 @@ export function renderTypesList(container: Element, query: Record<string, string
 
 export function renderTypeDetail(container: Element, name: string): void {
   clear(container);
-  const td = findType(name);
-  if (!td) { renderNotFound(container, "Type", name, "#/types", "All types"); return; }
+  if (name.includes("*") || name.includes("?")) { navigate(`/types?q=${encodeURIComponent(name)}`); return; }
+  const result = flexFindType(name);
+  if (!result) { renderNotFound(container, "Type", name, buildHash("/types"), "All types", findSimilarNames(name)); return; }
+  if (result.canonical !== name) { navigate("/types/" + encodeURIComponent(result.canonical)); return; }
+  const td = result.item;
 
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: "#/types", className: "back-link" }, "\u2190 All types"));
+  pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "\u2190 All types"));
   pg.appendChild(el("h2", { className: "mono" }, td.name));
 
   const tags = el("div", { className: "tag-row" });

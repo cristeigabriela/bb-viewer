@@ -93,6 +93,19 @@ Note: `bb-funcs --arch arm` and `bb-funcs --arch arm64` will fail (ARM ABI not y
 - **DLL cleaning**: Use `cleanDll()` from `data.ts` to normalize DLL names (strips parenthetical suffixes and semicolon-separated entries).
 - **Primitives list**: `src/primitives.ts` is the single source of truth for known primitive types. Shared by `data.ts` (browser) and `build-graph.ts` (build tool).
 
+## URL state management
+
+All view state is encoded in the URL hash for shareability and bookmarking.
+
+- **Global params** (`ds`, `arch`): Always present in every URL. Managed by `injectContext()` in `router.ts`. A global click interceptor on `document` catches all `<a href="#/...">` clicks and injects these params automatically — so plain `#/types` hrefs work without manual `buildHash()` calls.
+- **View-specific params** (filters, sort, page, search query): Only present while that view is active. Each view reads all params on init and calls `syncViewUrl()` on every filter/sort/page change via `history.replaceState`. When navigating to a different view, `navigate()` only carries `ds`/`arch` — view params naturally drop off.
+- **Multi-value filters** (header, dll, returnType): Serialized as comma-separated values (e.g., `header=ntddk.h,winbase.h`).
+- **Default omission**: View params at default values (empty search, sort by name asc, page 0) are omitted from the URL to keep it clean.
+- **Encoding**: All URL encoding/decoding goes through `URLSearchParams` for consistent `+`/`%20` handling. Never use raw `decodeURIComponent` for query strings.
+- **`flexFindType()`**: Handles `_` prefix resolution for types (e.g., `KUSER_SHARED_DATA` → `_KUSER_SHARED_DATA`), redirecting to the canonical URL.
+- **Glob in detail routes**: If a detail URL's name param contains `*` or `?`, it redirects to the corresponding list view with `?q=` set.
+- **Universal lookup**: `/q/:name` searches all entity types, auto-redirects on single match, shows disambiguation for multiple matches.
+
 ## CSS theme system
 
 - Terminal aesthetic: Courier New font, no rounded corners, scanline overlay, text shadows

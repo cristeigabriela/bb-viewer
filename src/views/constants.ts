@@ -1,9 +1,10 @@
-import { getConstants, getEnums, findConst, findEnum, hasConst, getXRef, getAllHeaders } from "../data";
+import { getConstants, getEnums, findConst, findEnum, findSimilarNames, hasConst, getXRef, getAllHeaders } from "../data";
 import { el, clear } from "../dom";
 import { matchQuery } from "../utils";
 import { constLink, enumLink, funcLink, headerLink, badge, highlightCode } from "../ui/links";
+import { buildHash, navigate } from "../router";
 import { buildFilterDropdown, FilterDropdownHandle } from "../ui/filter-dropdown";
-import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination } from "./shared";
+import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl } from "./shared";
 import type { Constant, EnumDef } from "../types";
 
 const PAGE_SIZE = 50;
@@ -11,13 +12,25 @@ const PAGE_SIZE = 50;
 export function renderConstantsList(container: Element, query: Record<string, string> = {}): void {
   clear(container);
 
-  let tab: "macros" | "enums" = "macros";
+  let tab: "macros" | "enums" = (query.tab as any) ?? "macros";
   let searchQuery = query.q ?? "";
-  let useRegex = false;
-  const filterHeaders = new Set<string>();
-  if (query.header) filterHeaders.add(query.header);
-  let page = 0;
+  let useRegex = query.regex === "1";
+  const filterHeaders = new Set<string>(query.header ? query.header.split(",") : []);
+  let page = parseInt(query.page ?? "") || 0;
   let headerDropdown: FilterDropdownHandle;
+
+  function syncUrl() {
+    const s = tab === "macros" ? macroSort?.getState() : enumSort?.getState();
+    syncViewUrl("/constants", {
+      q: searchQuery,
+      regex: useRegex ? "1" : "",
+      header: [...filterHeaders].join(","),
+      tab: tab !== "macros" ? tab : "",
+      sort: s && s.sortBy !== "name" ? s.sortBy : "",
+      sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
+      page: page > 0 ? String(page) : "",
+    });
+  }
 
   const pg = el("div", { className: "list-view" });
   pg.appendChild(el("div", { className: "title-row" }, el("h2", {}, "Constants")));
@@ -29,6 +42,7 @@ export function renderConstantsList(container: Element, query: Record<string, st
     headerDropdown?.refresh();
     rebuildChips();
     render();
+    syncUrl();
   }
 
   function rebuildChips() {
@@ -44,16 +58,16 @@ export function renderConstantsList(container: Element, query: Record<string, st
     `Macro Constants (${getConstants().length.toLocaleString()})`);
   const enumTab = el("button", { className: `tab-btn ${tab === "enums" ? "active" : ""}` },
     `Enums (${getEnums().length.toLocaleString()})`);
-  macroTab.addEventListener("click", () => { tab = "macros"; page = 0; render(); });
-  enumTab.addEventListener("click", () => { tab = "enums"; page = 0; render(); });
+  macroTab.addEventListener("click", () => { tab = "macros"; page = 0; render(); syncUrl(); });
+  enumTab.addEventListener("click", () => { tab = "enums"; page = 0; render(); syncUrl(); });
   tabs.appendChild(macroTab); tabs.appendChild(enumTab);
   pg.appendChild(tabs);
 
   // Controls
   const controls = el("div", { className: "controls" });
   const search = buildSearchInput("Search (glob: STATUS_*, *ACCESS*)...", (q, re) => {
-    searchQuery = q; useRegex = re; page = 0; render();
-  }, searchQuery);
+    searchQuery = q; useRegex = re; page = 0; render(); syncUrl();
+  }, searchQuery, useRegex);
   controls.appendChild(search.element);
 
   headerDropdown = buildFilterDropdown("Filter by Header", getAllHeaders(), filterHeaders, () => { page = 0; refreshAll(); });
@@ -61,8 +75,10 @@ export function renderConstantsList(container: Element, query: Record<string, st
   pg.appendChild(controls);
 
   // Sort
-  const macroSort = buildSortRow([["name", "Name"], ["value", "Value"]], { sortBy: "name", sortDir: "asc" }, () => { page = 0; render(); });
-  const enumSort = buildSortRow([["name", "Name"], ["value", "Variants"]], { sortBy: "name", sortDir: "asc" }, () => { page = 0; render(); });
+  const initSort = query.sort ?? "name";
+  const initSortDir = (query.sortDir ?? "asc") as "asc" | "desc";
+  const macroSort = buildSortRow([["name", "Name"], ["value", "Value"]], { sortBy: initSort, sortDir: initSortDir }, () => { page = 0; render(); syncUrl(); });
+  const enumSort = buildSortRow([["name", "Name"], ["value", "Variants"]], { sortBy: initSort, sortDir: initSortDir }, () => { page = 0; render(); syncUrl(); });
   const sortContainer = el("div", {});
   pg.appendChild(sortContainer);
 
@@ -121,7 +137,7 @@ export function renderConstantsList(container: Element, query: Record<string, st
     for (const c of pageItems) {
       const tr = el("tr", {});
       const nameTd = el("td", { className: "mono" });
-      nameTd.appendChild(el("a", { className: "item-name", href: `#/constants/${encodeURIComponent(c.name)}` }, c.name));
+      nameTd.appendChild(el("a", { className: "item-name", href: buildHash(`/constants/${encodeURIComponent(c.name)}`) }, c.name));
       tr.appendChild(nameTd);
       tr.appendChild(el("td", { className: "mono val-col" }, String(c.value)));
       tr.appendChild(el("td", { className: "mono hex-col" }, c.hex));
@@ -149,7 +165,7 @@ export function renderConstantsList(container: Element, query: Record<string, st
     }
     table.appendChild(tbody);
     listContainer.appendChild(table);
-    renderPagination(pagContainer, page, totalPages, (p) => { page = p; render(); listContainer.scrollIntoView({ behavior: "smooth" }); });
+    renderPagination(pagContainer, page, totalPages, (p) => { page = p; render(); syncUrl(); listContainer.scrollIntoView({ behavior: "smooth" }); });
   }
 
   function renderEnumsList() {
@@ -164,7 +180,7 @@ export function renderConstantsList(container: Element, query: Record<string, st
       const header = el("div", { className: "item-header" });
       const arrow = el("span", { className: "collapse-arrow" }, "\u25b6");
       header.appendChild(arrow);
-      header.appendChild(el("a", { className: "item-name", href: `#/constants/enum/${encodeURIComponent(e.name)}` }, e.name));
+      header.appendChild(el("a", { className: "item-name", href: buildHash(`/constants/enum/${encodeURIComponent(e.name)}`) }, e.name));
       const info = el("span", { className: "item-info" });
       info.appendChild(badge(`${e.constants.length} variants`, "tag-fields"));
       if (e.constants.length > 0) info.appendChild(badge(`${e.constants[0].value}\u2013${e.constants[e.constants.length - 1].value}`, "tag-range"));
@@ -189,7 +205,7 @@ export function renderConstantsList(container: Element, query: Record<string, st
       row.appendChild(header); row.appendChild(body);
       listContainer.appendChild(row);
     }
-    renderPagination(pagContainer, page, totalPages, (p) => { page = p; render(); listContainer.scrollIntoView({ behavior: "smooth" }); });
+    renderPagination(pagContainer, page, totalPages, (p) => { page = p; render(); syncUrl(); listContainer.scrollIntoView({ behavior: "smooth" }); });
   }
 
   render();
@@ -197,11 +213,12 @@ export function renderConstantsList(container: Element, query: Record<string, st
 
 export function renderConstantDetail(container: Element, name: string): void {
   clear(container);
+  if (name.includes("*") || name.includes("?")) { navigate(`/constants?q=${encodeURIComponent(name)}`); return; }
   const c = findConst(name);
-  if (!c) { renderNotFound(container, "Constant", name, "#/constants", "All constants"); return; }
+  if (!c) { renderNotFound(container, "Constant", name, buildHash("/constants"), "All constants", findSimilarNames(name)); return; }
 
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: "#/constants", className: "back-link" }, "\u2190 All constants"));
+  pg.appendChild(el("a", { href: buildHash("/constants"), className: "back-link" }, "\u2190 All constants"));
   pg.appendChild(el("h2", { className: "mono" }, c.name));
 
   const valContent = el("div", {});
@@ -283,11 +300,12 @@ export function renderConstantDetail(container: Element, name: string): void {
 
 export function renderEnumDetail(container: Element, name: string): void {
   clear(container);
+  if (name.includes("*") || name.includes("?")) { navigate(`/constants?q=${encodeURIComponent(name)}`); return; }
   const e = findEnum(name);
-  if (!e) { renderNotFound(container, "Enum", name, "#/constants", "All constants"); return; }
+  if (!e) { renderNotFound(container, "Enum", name, buildHash("/constants"), "All constants", findSimilarNames(name)); return; }
 
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: "#/constants", className: "back-link" }, "\u2190 All constants"));
+  pg.appendChild(el("a", { href: buildHash("/constants"), className: "back-link" }, "\u2190 All constants"));
   pg.appendChild(el("h2", { className: "mono" }, e.name));
 
   const tags = el("div", { className: "tag-row" });

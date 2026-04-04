@@ -1,4 +1,5 @@
 import { getCurrentDataset, getCurrentArch } from "../data";
+import { buildHash } from "../router";
 import { el, clear } from "../dom";
 import { debounce } from "../utils";
 
@@ -60,7 +61,7 @@ export async function renderTypeGraph(container: Element): void {
 
   // Subtab nav
   const tabRow = el("div", { className: "tabs" });
-  const listTab = el("a", { href: "#/types", className: "tab-btn" }, "list");
+  const listTab = el("a", { href: buildHash("/types"), className: "tab-btn" }, "list");
   const graphTab = el("button", { className: "tab-btn active" }, "graph");
   tabRow.appendChild(listTab);
   tabRow.appendChild(graphTab);
@@ -315,14 +316,14 @@ export async function renderTypeGraph(container: Element): void {
 
   // Double-click → navigate to type detail
   cy.on("dbltap", "node", (evt: any) => {
-    window.location.hash = `#/types/${encodeURIComponent(evt.target.id())}`;
+    window.location.hash = buildHash(`/types/${encodeURIComponent(evt.target.id())}`);
   });
 
   function showNodeInfo(data: any) {
     nodeInfo.innerHTML = "";
     unselectBtn.classList.remove("hidden");
     const name = el("a", {
-      href: `#/types/${encodeURIComponent(data.id)}`,
+      href: buildHash(`/types/${encodeURIComponent(data.id)}`),
       className: "gni-name",
     }, data.id);
     nodeInfo.appendChild(name);

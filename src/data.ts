@@ -1,5 +1,6 @@
 import type { FuncsData, TypesData, ConstsData, XRefIndex, Func, TypeDef, Constant, EnumDef } from "./types";
 import { KNOWN_PRIMITIVES } from "./primitives";
+import { levenshtein } from "./utils";
 
 let funcsData: FuncsData;
 let typesData: TypesData;
@@ -254,6 +255,17 @@ export function hasEnum(name: string): boolean { return enumSet.has(name); }
 export function findType(name: string): TypeDef | undefined {
   return typesByName.get(name);
 }
+export function flexFindType(name: string): { canonical: string; item: TypeDef } | undefined {
+  let t = typesByName.get(name);
+  if (t) return { canonical: name, item: t };
+  t = typesByName.get("_" + name);
+  if (t) return { canonical: "_" + name, item: t };
+  if (name.startsWith("_")) {
+    t = typesByName.get(name.slice(1));
+    if (t) return { canonical: name.slice(1), item: t };
+  }
+  return undefined;
+}
 export function findFunc(name: string): Func | undefined {
   return funcsByName.get(name);
 }
@@ -264,10 +276,13 @@ export function findConst(name: string): Constant | undefined {
   return constsByName.get(name);
 }
 
-/** Clean DLL name: split on first whitespace or semicolon, keep first entry */
+/** Clean DLL name: strip parenthetical suffixes, semicolons, lowercase.
+ *  HACK: .lib→.dll is a workaround for sdk-api data having "Kernel32.lib"
+ *  in the DLL field for 4 functions. Fix submitted upstream to Microsoft. */
 export function cleanDll(dll: string): string {
-  const first = dll.split(";")[0].trim();
-  return first.split(/\s/)[0];
+  let name = dll.split(";")[0].trim().split(/\s/)[0].toLowerCase();
+  if (name.endsWith(".lib")) name = name.slice(0, -4) + ".dll";
+  return name;
 }
 
 /** Get the canonical type name for linking (resolves aliases) */
@@ -309,4 +324,23 @@ export function searchAll(query: string, limit = 20): Array<{ kind: string; name
 
   results.sort((a, b) => b.score - a.score);
   return results.slice(0, limit);
+}
+
+export function findSimilarNames(query: string, limit = 5): Array<{ kind: string; name: string }> {
+  const q = query.toLowerCase();
+  const maxDist = Math.max(5, Math.floor(q.length * 0.4));
+  const candidates: Array<{ kind: string; name: string; dist: number }> = [];
+
+  const check = (name: string, kind: string) => {
+    const d = levenshtein(q, name.toLowerCase());
+    if (d > 0 && d <= maxDist) candidates.push({ kind, name, dist: d });
+  };
+
+  for (const f of funcsData.functions) check(f.name, "function");
+  for (const t of typesData.types) check(t.name, "type");
+  for (const c of constsData.constants) check(c.name, "constant");
+  for (const e of constsData.enums) check(e.name, "enum");
+
+  candidates.sort((a, b) => a.dist - b.dist);
+  return candidates.slice(0, limit);
 }

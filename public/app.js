@@ -118,6 +118,51 @@ var KNOWN_PRIMITIVES = new Set([
   "LPDWORD"
 ]);
 
+// src/utils.ts
+function globToRegex(pattern) {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
+  return new RegExp(`^${escaped}$`, "i");
+}
+function matchQuery(value, query, useRegex) {
+  if (!query)
+    return true;
+  if (useRegex) {
+    try {
+      return new RegExp(query, "i").test(value);
+    } catch {
+      return false;
+    }
+  }
+  if (!query.includes("*") && !query.includes("?")) {
+    return value.toLowerCase().includes(query.toLowerCase());
+  }
+  if (!query.includes("*") && query.includes("?")) {
+    query = "*" + query + "*";
+  }
+  return globToRegex(query).test(value);
+}
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1;i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1;j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
 // src/data.ts
 var funcsData;
 var typesData;
@@ -368,6 +413,20 @@ function hasConst(name) {
 function findType(name) {
   return typesByName.get(name);
 }
+function flexFindType(name) {
+  let t = typesByName.get(name);
+  if (t)
+    return { canonical: name, item: t };
+  t = typesByName.get("_" + name);
+  if (t)
+    return { canonical: "_" + name, item: t };
+  if (name.startsWith("_")) {
+    t = typesByName.get(name.slice(1));
+    if (t)
+      return { canonical: name.slice(1), item: t };
+  }
+  return;
+}
 function findFunc(name) {
   return funcsByName.get(name);
 }
@@ -378,8 +437,10 @@ function findConst(name) {
   return constsByName.get(name);
 }
 function cleanDll(dll) {
-  const first = dll.split(";")[0].trim();
-  return first.split(/\s/)[0];
+  let name = dll.split(";")[0].trim().split(/\s/)[0].toLowerCase();
+  if (name.endsWith(".lib"))
+    name = name.slice(0, -4) + ".dll";
+  return name;
 }
 function canonicalTypeName(token) {
   if (typesByName.has(token))
@@ -425,6 +486,26 @@ function searchAll(query, limit = 20) {
   results.sort((a, b) => b.score - a.score);
   return results.slice(0, limit);
 }
+function findSimilarNames(query, limit = 5) {
+  const q = query.toLowerCase();
+  const maxDist = Math.max(5, Math.floor(q.length * 0.4));
+  const candidates = [];
+  const check = (name, kind) => {
+    const d = levenshtein(q, name.toLowerCase());
+    if (d > 0 && d <= maxDist)
+      candidates.push({ kind, name, dist: d });
+  };
+  for (const f of funcsData.functions)
+    check(f.name, "function");
+  for (const t of typesData.types)
+    check(t.name, "type");
+  for (const c of constsData.constants)
+    check(c.name, "constant");
+  for (const e of constsData.enums)
+    check(e.name, "enum");
+  candidates.sort((a, b) => a.dist - b.dist);
+  return candidates.slice(0, limit);
+}
 
 // src/router.ts
 var routes = [];
@@ -436,27 +517,69 @@ function route(pattern, handler) {
   });
   routes.push({ pattern: new RegExp("^" + regexStr + "$"), keys, handler });
 }
+function injectContext(raw) {
+  const [path, qs] = raw.split("?");
+  const params = new URLSearchParams(qs ?? "");
+  if (!params.has("ds"))
+    params.set("ds", getCurrentDataset());
+  if (!params.has("arch"))
+    params.set("arch", getCurrentArch());
+  return `${path}?${params}`;
+}
+function buildHash(pathWithQuery) {
+  return "#" + injectContext(pathWithQuery);
+}
 function navigate(hash) {
-  if (!hash.startsWith("#"))
-    hash = "#" + hash;
-  window.location.hash = hash;
+  if (hash.startsWith("#"))
+    hash = hash.slice(1);
+  window.location.hash = injectContext(hash);
 }
 function parseQuery(qs) {
   const params = {};
   if (!qs)
     return params;
-  for (const part of qs.split("&")) {
-    const [k, v] = part.split("=");
-    if (k)
-      params[decodeURIComponent(k)] = decodeURIComponent(v ?? "");
-  }
+  for (const [k, v] of new URLSearchParams(qs))
+    params[k] = v;
   return params;
 }
+var onDatasetChange = null;
+function setOnDatasetChange(cb) {
+  onDatasetChange = cb;
+}
 function startRouter() {
-  const dispatch = () => {
+  document.addEventListener("click", (e) => {
+    const anchor = e.target.closest?.("a[href^='#/']");
+    if (!anchor)
+      return;
+    const raw = anchor.getAttribute("href");
+    const injected = "#" + injectContext(raw.slice(1));
+    if (raw !== injected) {
+      e.preventDefault();
+      window.location.hash = injected.slice(1);
+    }
+  });
+  let dispatchId = 0;
+  const dispatch = async () => {
+    const myId = ++dispatchId;
     const raw = window.location.hash.slice(1) || "/";
     const [path, qs] = raw.split("?");
     const query = parseQuery(qs ?? "");
+    const effectiveDs = query.ds ?? "winsdk";
+    const effectiveArch = query.arch ?? "amd64";
+    delete query.ds;
+    delete query.arch;
+    if (effectiveDs !== getCurrentDataset() || effectiveArch !== getCurrentArch()) {
+      await loadData(effectiveDs, effectiveArch);
+      if (myId !== dispatchId)
+        return;
+      if (onDatasetChange)
+        await onDatasetChange();
+    }
+    if (!qs || !qs.includes("ds=") || !qs.includes("arch=")) {
+      history.replaceState(null, "", "#" + injectContext(raw));
+    }
+    if (myId !== dispatchId)
+      return;
     for (const r of routes) {
       const m = path.match(r.pattern);
       if (m) {
@@ -532,21 +655,25 @@ function setupTheme() {
 }
 
 // src/dataset-switcher.ts
-async function reloadAndRedispatch() {
-  const content = $("#content");
-  const loading = el("div", { className: "dataset-loading" }, "Switching...");
-  content.appendChild(loading);
-  try {
-    await loadData(getCurrentDataset(), getCurrentArch());
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  } catch (e) {
-    loading.textContent = `Failed to load data: ${e}`;
-    loading.className = "error";
-  }
+function buildSwitchParams(ds, arch) {
+  const params = new URLSearchParams;
+  params.set("ds", ds);
+  params.set("arch", arch);
+  return `?${params}`;
 }
 function setupDatasetSwitcher() {
   const dsButtons = $$(".dataset-btn");
   const archContainer = $(".arch-switcher");
+  function syncButtonStates() {
+    const ds = getCurrentDataset();
+    const arch = getCurrentArch();
+    for (const btn of dsButtons) {
+      btn.classList.toggle("active", btn.getAttribute("data-dataset") === ds);
+    }
+    for (const btn of archContainer.querySelectorAll(".arch-btn")) {
+      btn.classList.toggle("active", btn.getAttribute("data-arch") === arch);
+    }
+  }
   async function refreshArchButtons() {
     archContainer.innerHTML = "";
     const available = await getAvailableArchs();
@@ -560,13 +687,12 @@ function setupDatasetSwitcher() {
         className: `arch-btn ${arch === getCurrentArch() ? "active" : ""}`,
         "data-arch": arch
       }, arch);
-      btn.addEventListener("click", async () => {
+      btn.addEventListener("click", () => {
         if (arch === getCurrentArch())
           return;
-        archContainer.querySelectorAll(".arch-btn").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        await loadData(undefined, arch);
-        await reloadAndRedispatch();
+        const hash = window.location.hash.slice(1) || "/";
+        const [path] = hash.split("?");
+        navigate(path + buildSwitchParams(getCurrentDataset(), arch));
       });
       archContainer.appendChild(btn);
     }
@@ -576,13 +702,17 @@ function setupDatasetSwitcher() {
       const dataset = btn.getAttribute("data-dataset");
       if (dataset === getCurrentDataset())
         return;
-      dsButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      await loadData(dataset);
-      await refreshArchButtons();
-      await reloadAndRedispatch();
+      const hash = window.location.hash.slice(1) || "/";
+      const [path] = hash.split("?");
+      navigate(path + buildSwitchParams(dataset, getCurrentArch()));
     });
   }
+  setOnDatasetChange(async () => {
+    syncButtonStates();
+    await refreshArchButtons();
+    syncButtonStates();
+  });
+  syncButtonStates();
   getAvailableDatasets().then((available) => {
     for (const btn of dsButtons) {
       const ds = btn.getAttribute("data-dataset");
@@ -595,7 +725,7 @@ function setupDatasetSwitcher() {
         switcher.style.display = "none";
     }
   });
-  refreshArchButtons();
+  refreshArchButtons().then(syncButtonStates);
 }
 
 // src/ui/links.ts
@@ -603,22 +733,22 @@ function typeLink(name, displayName) {
   const canonical = canonicalTypeName(name) ?? name;
   return el("a", {
     className: "xref xref-type",
-    href: `#/types/${encodeURIComponent(canonical)}`
+    href: buildHash("/types/" + encodeURIComponent(canonical))
   }, displayName ?? name);
 }
 function funcLink(name) {
-  return el("a", { className: "xref xref-func", href: `#/functions/${encodeURIComponent(name)}` }, name);
+  return el("a", { className: "xref xref-func", href: buildHash("/functions/" + encodeURIComponent(name)) }, name);
 }
 function constLink(name) {
-  return el("a", { className: "xref xref-const", href: `#/constants/${encodeURIComponent(name)}` }, name);
+  return el("a", { className: "xref xref-const", href: buildHash("/constants/" + encodeURIComponent(name)) }, name);
 }
 function enumLink(name) {
-  return el("a", { className: "xref xref-enum", href: `#/constants/enum/${encodeURIComponent(name)}` }, name);
+  return el("a", { className: "xref xref-enum", href: buildHash("/constants/enum/" + encodeURIComponent(name)) }, name);
 }
 function headerLink(header, view = "functions") {
   return el("a", {
     className: "xref xref-header",
-    href: `#/${view}?header=${encodeURIComponent(header)}`
+    href: buildHash("/" + view + "?header=" + encodeURIComponent(header))
   }, header);
 }
 function badge(text, cls = "") {
@@ -654,34 +784,6 @@ function highlightCode(preEl) {
   } catch {}
 }
 
-// src/utils.ts
-function globToRegex(pattern) {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
-  return new RegExp(`^${escaped}$`, "i");
-}
-function matchQuery(value, query, useRegex) {
-  if (!query)
-    return true;
-  if (useRegex) {
-    try {
-      return new RegExp(query, "i").test(value);
-    } catch {
-      return false;
-    }
-  }
-  if (!query.includes("*") && !query.includes("?")) {
-    return value.toLowerCase().includes(query.toLowerCase());
-  }
-  return globToRegex(query).test(value);
-}
-function debounce(fn, ms) {
-  let timer;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), ms);
-  };
-}
-
 // src/search-modal.ts
 var overlay;
 var input;
@@ -693,15 +795,15 @@ var previewTimer = null;
 function getHref(item) {
   switch (item.kind) {
     case "function":
-      return `#/functions/${encodeURIComponent(item.name)}`;
+      return buildHash(`/functions/${encodeURIComponent(item.name)}`);
     case "type":
-      return `#/types/${encodeURIComponent(item.name)}`;
+      return buildHash(`/types/${encodeURIComponent(item.name)}`);
     case "constant":
-      return `#/constants/${encodeURIComponent(item.name)}`;
+      return buildHash(`/constants/${encodeURIComponent(item.name)}`);
     case "enum":
-      return `#/constants/enum/${encodeURIComponent(item.name)}`;
+      return buildHash(`/constants/enum/${encodeURIComponent(item.name)}`);
     default:
-      return "#/";
+      return buildHash("/");
   }
 }
 function getBadge(kind) {
@@ -839,11 +941,12 @@ function getShortcuts() {
   const shortcuts = [];
   for (const link of document.querySelectorAll(".nav-link")) {
     const text = link.textContent?.trim().toLowerCase() ?? "";
-    const href = link.getAttribute("href") ?? "#/";
+    const rawHref = link.getAttribute("href") ?? "#/";
+    const href = buildHash(rawHref.replace(/^#/, ""));
     if (text)
       shortcuts.push({ kind: "page", name: text, href });
   }
-  shortcuts.push({ kind: "page", name: "type graph", href: "#/types/graph" });
+  shortcuts.push({ kind: "page", name: "type graph", href: buildHash("/types/graph") });
   return shortcuts;
 }
 function renderResultRow(item, index) {
@@ -1249,7 +1352,7 @@ function renderHome(container) {
   const page = el("div", { className: "home-view" });
   page.appendChild(el("div", { className: "hero" }, el("h1", {}, "bb viewer"), el("p", { className: "hero-sub" }, "Windows SDK & PHNT header analysis explorer")));
   const statsRow = el("div", { className: "stats-row" });
-  const exported = funcs.filter((f) => f.is_exported).length;
+  const exported = funcs.filter((f) => f.is_dllimport).length;
   const withMeta = funcs.filter((f) => f.metadata).length;
   const withFields = types.filter((t) => t.fields.length > 0).length;
   const withComponents = consts.filter((c) => c.components && c.components.length > 0).length;
@@ -1550,8 +1653,18 @@ function buildFilterDropdown(label, allValues, activeSet, onChange) {
 }
 
 // src/views/shared.ts
-function buildSearchInput(placeholder, onChange, initial = "") {
-  let useRegex = false;
+function syncViewUrl(basePath, viewParams) {
+  const params = new URLSearchParams;
+  for (const [k, v] of Object.entries(viewParams)) {
+    if (v)
+      params.set(k, v);
+  }
+  params.set("ds", getCurrentDataset());
+  params.set("arch", getCurrentArch());
+  history.replaceState(null, "", `#${basePath}?${params}`);
+}
+function buildSearchInput(placeholder, onChange, initial = "", initialRegex = false) {
+  let useRegex = initialRegex;
   const wrap = el("div", { className: "search-with-toggle" });
   const input2 = el("input", {
     type: "text",
@@ -1559,7 +1672,7 @@ function buildSearchInput(placeholder, onChange, initial = "") {
     className: "search-input"
   });
   input2.value = initial;
-  const regexBtn = el("button", { className: "regex-toggle-btn" }, ".*");
+  const regexBtn = el("button", { className: `regex-toggle-btn${useRegex ? " active" : ""}` }, ".*");
   regexBtn.title = "Toggle regex mode";
   regexBtn.addEventListener("click", () => {
     useRegex = !useRegex;
@@ -1616,8 +1729,22 @@ function renderFilterChips(container, chips) {
     container.appendChild(span);
   }
 }
-function renderNotFound(container, entity, name, backHref, backLabel) {
-  container.appendChild(el("div", { className: "not-found" }, el("h2", {}, `${entity} not found`), el("p", {}, `No ${entity.toLowerCase()} named "${name}" was found.`), el("a", { href: backHref }, `← ${backLabel}`)));
+function renderNotFound(container, entity, name, backHref, backLabel, suggestions) {
+  const enc = (s) => encodeURIComponent(s);
+  const div = el("div", { className: "not-found" }, el("h2", {}, `${entity} not found`), el("p", {}, `No ${entity.toLowerCase()} named "${name}" was found.`));
+  if (suggestions && suggestions.length > 0) {
+    div.appendChild(el("p", { className: "dim" }, "Did you mean?"));
+    const list = el("div", { className: "suggestions" });
+    for (const s of suggestions) {
+      const href = s.kind === "function" ? buildHash(`/functions/${enc(s.name)}`) : s.kind === "type" ? buildHash(`/types/${enc(s.name)}`) : s.kind === "enum" ? buildHash(`/constants/enum/${enc(s.name)}`) : buildHash(`/constants/${enc(s.name)}`);
+      const chip = el("span", { className: "suggestion-chip" }, el("a", { href, className: "xref" }, s.name));
+      chip.appendChild(el("span", { className: "dim" }, ` (${s.kind})`));
+      list.appendChild(chip);
+    }
+    div.appendChild(list);
+  }
+  div.appendChild(el("a", { href: backHref }, `← ${backLabel}`));
+  container.appendChild(div);
   return false;
 }
 function collapsibleSection(title, ...children) {
@@ -1811,7 +1938,7 @@ function renderFuncDetailView(fn) {
       const cleaned = cleanDll(fn.metadata.dll);
       const dllRow = el("div", {});
       dllRow.appendChild(el("strong", {}, "DLL: "));
-      dllRow.appendChild(el("a", { href: `#/functions?dll=${encodeURIComponent(cleaned)}`, className: "xref" }, cleaned));
+      dllRow.appendChild(el("a", { href: buildHash(`/functions?dll=${encodeURIComponent(cleaned)}`), className: "xref" }, cleaned));
       grid.appendChild(dllRow);
     }
     if (fn.metadata.lib)
@@ -1872,28 +1999,41 @@ function renderFuncDetailView(fn) {
 }
 function renderFunctionsList(container, query = {}) {
   clear(container);
-  const hasQueryOverride = !!(query.header || query.dll || query.q || query.minParams || query.maxParams || query.ptrDepth || query.minClient || query.minServer);
-  let filterExported = hasQueryOverride ? "all" : "yes";
-  const filterHeaders = new Set;
-  const filterReturnTypes = new Set;
-  const filterDlls = new Set;
+  const hasQueryOverride = !!(query.header || query.dll || query.q || query.returnType || query.minParams || query.maxParams || query.ptrDepth || query.minClient || query.minServer || query.exported);
+  let filterExported = query.exported ?? (hasQueryOverride ? "all" : "yes");
+  const filterHeaders = new Set(query.header ? query.header.split(",") : []);
+  const filterReturnTypes = new Set(query.returnType ? query.returnType.split(",") : []);
+  const filterDlls = new Set(query.dll ? query.dll.split(",") : []);
   let filterMinParams = parseInt(query.minParams ?? "") || 0;
   let filterMaxParams = parseInt(query.maxParams ?? "") || Infinity;
   let filterPointerDepth = parseInt(query.ptrDepth ?? "") || -1;
   let filterMinClient = query.minClient ?? "";
   let filterMinServer = query.minServer ?? "";
-  let page = 0;
+  let page = parseInt(query.page ?? "") || 0;
   let searchQuery = query.q ?? "";
-  let useRegex = false;
-  if (query.header)
-    filterHeaders.add(query.header);
-  if (query.dll)
-    filterDlls.add(query.dll);
-  if (query.returnType)
-    filterReturnTypes.add(query.returnType);
+  let useRegex = query.regex === "1";
   let headerDropdown;
   let returnTypeDropdown;
   let dllDropdown;
+  function syncUrl() {
+    const s = sort?.getState();
+    syncViewUrl("/functions", {
+      q: searchQuery,
+      regex: useRegex ? "1" : "",
+      header: [...filterHeaders].join(","),
+      dll: [...filterDlls].join(","),
+      returnType: [...filterReturnTypes].join(","),
+      exported: filterExported !== "yes" ? filterExported : "",
+      minParams: filterMinParams > 0 ? String(filterMinParams) : "",
+      maxParams: filterMaxParams < Infinity ? String(filterMaxParams) : "",
+      ptrDepth: filterPointerDepth >= 0 ? String(filterPointerDepth) : "",
+      minClient: filterMinClient,
+      minServer: filterMinServer,
+      sort: s && s.sortBy !== "name" ? s.sortBy : "",
+      sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
+      page: page > 0 ? String(page) : ""
+    });
+  }
   const pg = el("div", { className: "list-view" });
   pg.appendChild(el("div", { className: "title-row" }, el("h2", {}, "Functions")));
   const activeFiltersEl = el("div", { className: "active-filters" });
@@ -1904,6 +2044,7 @@ function renderFunctionsList(container, query = {}) {
     dllDropdown?.refresh();
     rebuildChips();
     renderList();
+    syncUrl();
   }
   function rebuildChips() {
     const chips = [];
@@ -1964,7 +2105,8 @@ function renderFunctionsList(container, query = {}) {
     useRegex = re;
     page = 0;
     renderList();
-  }, searchQuery);
+    syncUrl();
+  }, searchQuery, useRegex);
   controls.appendChild(search.element);
   const exportSel = el("select", { className: "filter-select" });
   for (const [val, label] of [["all", "All"], ["yes", "Exported"], ["no", "Not Exported"]]) {
@@ -1977,6 +2119,7 @@ function renderFunctionsList(container, query = {}) {
     filterExported = exportSel.value;
     page = 0;
     renderList();
+    syncUrl();
   });
   controls.appendChild(exportSel);
   headerDropdown = buildFilterDropdown("Filter by Header", getAllHeaders(), filterHeaders, () => {
@@ -1997,9 +2140,12 @@ function renderFunctionsList(container, query = {}) {
   });
   controls.appendChild(dllDropdown.element);
   pg.appendChild(controls);
-  const sort = buildSortRow([["name", "Name"], ["params", "Params"]], { sortBy: "name", sortDir: "asc" }, () => {
+  const initSort = query.sort ?? "name";
+  const initSortDir = query.sortDir ?? "asc";
+  const sort = buildSortRow([["name", "Name"], ["params", "Params"]], { sortBy: initSort, sortDir: initSortDir }, () => {
     page = 0;
     renderList();
+    syncUrl();
   });
   pg.appendChild(sort.element);
   const listContainer = el("div", { className: "list-container" });
@@ -2055,7 +2201,7 @@ function renderFunctionsList(container, query = {}) {
     for (const fn of pageItems) {
       const row = el("div", { className: "list-item func-item" });
       const header = el("div", { className: "item-header" });
-      header.appendChild(el("a", { className: "item-name", href: `#/functions/${encodeURIComponent(fn.name)}` }, fn.name));
+      header.appendChild(el("a", { className: "item-name", href: buildHash(`/functions/${encodeURIComponent(fn.name)}`) }, fn.name));
       const retSpan = el("span", { className: "item-ret" });
       retSpan.appendChild(renderTypeStr(fn.return_type));
       header.appendChild(retSpan);
@@ -2078,6 +2224,7 @@ function renderFunctionsList(container, query = {}) {
     renderPagination(pagContainer, page, totalPages, (p) => {
       page = p;
       renderList();
+      syncUrl();
       listContainer.scrollIntoView({ behavior: "smooth" });
     });
   }
@@ -2085,13 +2232,17 @@ function renderFunctionsList(container, query = {}) {
 }
 function renderFunctionDetail(container, name) {
   clear(container);
+  if (name.includes("*") || name.includes("?")) {
+    navigate(`/functions?q=${encodeURIComponent(name)}`);
+    return;
+  }
   const fn = findFunc(name);
   if (!fn) {
-    renderNotFound(container, "Function", name, "#/functions", "All functions");
+    renderNotFound(container, "Function", name, buildHash("/functions"), "All functions", findSimilarNames(name));
     return;
   }
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: "#/functions", className: "back-link" }, "← All functions"));
+  pg.appendChild(el("a", { href: buildHash("/functions"), className: "back-link" }, "← All functions"));
   pg.appendChild(el("h2", {}, fn.name));
   pg.appendChild(renderFuncDetailView(fn));
   container.appendChild(pg);
@@ -2259,20 +2410,32 @@ function renderMemoryLayout(td) {
 }
 function renderTypesList(container, query = {}) {
   clear(container);
-  const filterHeaders = new Set;
-  if (query.header)
-    filterHeaders.add(query.header);
+  const filterHeaders = new Set(query.header ? query.header.split(",") : []);
   let filterMinSize = parseInt(query.minSize ?? "") || 0;
   let filterMaxSize = parseInt(query.maxSize ?? "") || Infinity;
-  let filterHasFields = "all";
-  let page = 0;
+  let filterHasFields = query.hasFields ?? "all";
+  let page = parseInt(query.page ?? "") || 0;
   let searchQuery = query.q ?? "";
-  let useRegex = false;
+  let useRegex = query.regex === "1";
   let headerDropdown;
+  function syncUrl() {
+    const s = sort?.getState();
+    syncViewUrl("/types", {
+      q: searchQuery,
+      regex: useRegex ? "1" : "",
+      header: [...filterHeaders].join(","),
+      minSize: filterMinSize > 0 ? String(filterMinSize) : "",
+      maxSize: filterMaxSize < Infinity ? String(filterMaxSize) : "",
+      hasFields: filterHasFields !== "all" ? filterHasFields : "",
+      sort: s && s.sortBy !== "name" ? s.sortBy : "",
+      sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
+      page: page > 0 ? String(page) : ""
+    });
+  }
   const pg = el("div", { className: "list-view" });
   const tabRow = el("div", { className: "tabs" });
   tabRow.appendChild(el("button", { className: "tab-btn active" }, "list"));
-  tabRow.appendChild(el("a", { href: "#/types/graph", className: "tab-btn" }, "graph"));
+  tabRow.appendChild(el("a", { href: buildHash("/types/graph"), className: "tab-btn" }, "graph"));
   pg.appendChild(tabRow);
   pg.appendChild(el("div", { className: "title-row" }, el("h2", {}, "Types")));
   const activeFiltersEl = el("div", { className: "active-filters" });
@@ -2281,6 +2444,7 @@ function renderTypesList(container, query = {}) {
     headerDropdown?.refresh();
     rebuildChips();
     renderList();
+    syncUrl();
   }
   function rebuildChips() {
     const chips = [];
@@ -2310,7 +2474,8 @@ function renderTypesList(container, query = {}) {
     useRegex = re;
     page = 0;
     renderList();
-  }, searchQuery);
+    syncUrl();
+  }, searchQuery, useRegex);
   controls.appendChild(search.element);
   headerDropdown = buildFilterDropdown("Filter by Header", getAllHeaders(), filterHeaders, () => {
     page = 0;
@@ -2325,6 +2490,7 @@ function renderTypesList(container, query = {}) {
     page = 0;
     rebuildChips();
     renderList();
+    syncUrl();
   });
   const sizeMax = el("input", { type: "number", placeholder: "Max size", className: "filter-input size-filter" });
   if (filterMaxSize < Infinity)
@@ -2334,6 +2500,7 @@ function renderTypesList(container, query = {}) {
     page = 0;
     rebuildChips();
     renderList();
+    syncUrl();
   });
   controls.appendChild(sizeMin);
   controls.appendChild(sizeMax);
@@ -2348,12 +2515,16 @@ function renderTypesList(container, query = {}) {
     filterHasFields = fieldsSel.value;
     page = 0;
     renderList();
+    syncUrl();
   });
   controls.appendChild(fieldsSel);
   pg.appendChild(controls);
-  const sort = buildSortRow([["name", "Name"], ["size", "Size"], ["fields", "Fields"]], { sortBy: "name", sortDir: "asc" }, () => {
+  const initSort = query.sort ?? "name";
+  const initSortDir = query.sortDir ?? "asc";
+  const sort = buildSortRow([["name", "Name"], ["size", "Size"], ["fields", "Fields"]], { sortBy: initSort, sortDir: initSortDir }, () => {
     page = 0;
     renderList();
+    syncUrl();
   });
   pg.appendChild(sort.element);
   const listContainer = el("div", { className: "list-container" });
@@ -2401,7 +2572,7 @@ function renderTypesList(container, query = {}) {
     for (const td of pageItems) {
       const row = el("div", { className: "list-item type-item" });
       const header = el("div", { className: "item-header" });
-      header.appendChild(el("a", { className: "item-name", href: `#/types/${encodeURIComponent(td.name)}` }, td.name));
+      header.appendChild(el("a", { className: "item-name", href: buildHash(`/types/${encodeURIComponent(td.name)}`) }, td.name));
       const info = el("span", { className: "item-info" });
       if (td.size !== null)
         info.appendChild(badge(`${td.size}B`, "tag-size"));
@@ -2428,6 +2599,7 @@ function renderTypesList(container, query = {}) {
     renderPagination(pagContainer, page, totalPages, (p) => {
       page = p;
       renderList();
+      syncUrl();
       listContainer.scrollIntoView({ behavior: "smooth" });
     });
   }
@@ -2435,13 +2607,22 @@ function renderTypesList(container, query = {}) {
 }
 function renderTypeDetail(container, name) {
   clear(container);
-  const td = findType(name);
-  if (!td) {
-    renderNotFound(container, "Type", name, "#/types", "All types");
+  if (name.includes("*") || name.includes("?")) {
+    navigate(`/types?q=${encodeURIComponent(name)}`);
     return;
   }
+  const result = flexFindType(name);
+  if (!result) {
+    renderNotFound(container, "Type", name, buildHash("/types"), "All types", findSimilarNames(name));
+    return;
+  }
+  if (result.canonical !== name) {
+    navigate("/types/" + encodeURIComponent(result.canonical));
+    return;
+  }
+  const td = result.item;
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: "#/types", className: "back-link" }, "← All types"));
+  pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "← All types"));
   pg.appendChild(el("h2", { className: "mono" }, td.name));
   const tags = el("div", { className: "tag-row" });
   if (td.size !== null)
@@ -2550,7 +2731,7 @@ async function renderTypeGraph(container) {
   clear(container);
   const page = el("div", { className: "graph-view" });
   const tabRow = el("div", { className: "tabs" });
-  const listTab = el("a", { href: "#/types", className: "tab-btn" }, "list");
+  const listTab = el("a", { href: buildHash("/types"), className: "tab-btn" }, "list");
   const graphTab = el("button", { className: "tab-btn active" }, "graph");
   tabRow.appendChild(listTab);
   tabRow.appendChild(graphTab);
@@ -2760,13 +2941,13 @@ async function renderTypeGraph(container) {
     }
   });
   cy.on("dbltap", "node", (evt) => {
-    window.location.hash = `#/types/${encodeURIComponent(evt.target.id())}`;
+    window.location.hash = buildHash(`/types/${encodeURIComponent(evt.target.id())}`);
   });
   function showNodeInfo(data) {
     nodeInfo.innerHTML = "";
     unselectBtn.classList.remove("hidden");
     const name = el("a", {
-      href: `#/types/${encodeURIComponent(data.id)}`,
+      href: buildHash(`/types/${encodeURIComponent(data.id)}`),
       className: "gni-name"
     }, data.id);
     nodeInfo.appendChild(name);
@@ -2864,14 +3045,24 @@ async function renderTypeGraph(container) {
 var PAGE_SIZE3 = 50;
 function renderConstantsList(container, query = {}) {
   clear(container);
-  let tab = "macros";
+  let tab = query.tab ?? "macros";
   let searchQuery = query.q ?? "";
-  let useRegex = false;
-  const filterHeaders = new Set;
-  if (query.header)
-    filterHeaders.add(query.header);
-  let page = 0;
+  let useRegex = query.regex === "1";
+  const filterHeaders = new Set(query.header ? query.header.split(",") : []);
+  let page = parseInt(query.page ?? "") || 0;
   let headerDropdown;
+  function syncUrl() {
+    const s = tab === "macros" ? macroSort?.getState() : enumSort?.getState();
+    syncViewUrl("/constants", {
+      q: searchQuery,
+      regex: useRegex ? "1" : "",
+      header: [...filterHeaders].join(","),
+      tab: tab !== "macros" ? tab : "",
+      sort: s && s.sortBy !== "name" ? s.sortBy : "",
+      sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
+      page: page > 0 ? String(page) : ""
+    });
+  }
   const pg = el("div", { className: "list-view" });
   pg.appendChild(el("div", { className: "title-row" }, el("h2", {}, "Constants")));
   const activeFiltersEl = el("div", { className: "active-filters" });
@@ -2880,6 +3071,7 @@ function renderConstantsList(container, query = {}) {
     headerDropdown?.refresh();
     rebuildChips();
     render();
+    syncUrl();
   }
   function rebuildChips() {
     const chips = [];
@@ -2899,11 +3091,13 @@ function renderConstantsList(container, query = {}) {
     tab = "macros";
     page = 0;
     render();
+    syncUrl();
   });
   enumTab.addEventListener("click", () => {
     tab = "enums";
     page = 0;
     render();
+    syncUrl();
   });
   tabs.appendChild(macroTab);
   tabs.appendChild(enumTab);
@@ -2914,7 +3108,8 @@ function renderConstantsList(container, query = {}) {
     useRegex = re;
     page = 0;
     render();
-  }, searchQuery);
+    syncUrl();
+  }, searchQuery, useRegex);
   controls.appendChild(search.element);
   headerDropdown = buildFilterDropdown("Filter by Header", getAllHeaders(), filterHeaders, () => {
     page = 0;
@@ -2922,13 +3117,17 @@ function renderConstantsList(container, query = {}) {
   });
   controls.appendChild(headerDropdown.element);
   pg.appendChild(controls);
-  const macroSort = buildSortRow([["name", "Name"], ["value", "Value"]], { sortBy: "name", sortDir: "asc" }, () => {
+  const initSort = query.sort ?? "name";
+  const initSortDir = query.sortDir ?? "asc";
+  const macroSort = buildSortRow([["name", "Name"], ["value", "Value"]], { sortBy: initSort, sortDir: initSortDir }, () => {
     page = 0;
     render();
+    syncUrl();
   });
-  const enumSort = buildSortRow([["name", "Name"], ["value", "Variants"]], { sortBy: "name", sortDir: "asc" }, () => {
+  const enumSort = buildSortRow([["name", "Name"], ["value", "Variants"]], { sortBy: initSort, sortDir: initSortDir }, () => {
     page = 0;
     render();
+    syncUrl();
   });
   const sortContainer = el("div", {});
   pg.appendChild(sortContainer);
@@ -2989,7 +3188,7 @@ function renderConstantsList(container, query = {}) {
     for (const c of pageItems) {
       const tr = el("tr", {});
       const nameTd = el("td", { className: "mono" });
-      nameTd.appendChild(el("a", { className: "item-name", href: `#/constants/${encodeURIComponent(c.name)}` }, c.name));
+      nameTd.appendChild(el("a", { className: "item-name", href: buildHash(`/constants/${encodeURIComponent(c.name)}`) }, c.name));
       tr.appendChild(nameTd);
       tr.appendChild(el("td", { className: "mono val-col" }, String(c.value)));
       tr.appendChild(el("td", { className: "mono hex-col" }, c.hex));
@@ -3024,6 +3223,7 @@ function renderConstantsList(container, query = {}) {
     renderPagination(pagContainer, page, totalPages, (p) => {
       page = p;
       render();
+      syncUrl();
       listContainer.scrollIntoView({ behavior: "smooth" });
     });
   }
@@ -3039,7 +3239,7 @@ function renderConstantsList(container, query = {}) {
       const header = el("div", { className: "item-header" });
       const arrow = el("span", { className: "collapse-arrow" }, "▶");
       header.appendChild(arrow);
-      header.appendChild(el("a", { className: "item-name", href: `#/constants/enum/${encodeURIComponent(e.name)}` }, e.name));
+      header.appendChild(el("a", { className: "item-name", href: buildHash(`/constants/enum/${encodeURIComponent(e.name)}`) }, e.name));
       const info = el("span", { className: "item-info" });
       info.appendChild(badge(`${e.constants.length} variants`, "tag-fields"));
       if (e.constants.length > 0)
@@ -3068,6 +3268,7 @@ function renderConstantsList(container, query = {}) {
     renderPagination(pagContainer, page, totalPages, (p) => {
       page = p;
       render();
+      syncUrl();
       listContainer.scrollIntoView({ behavior: "smooth" });
     });
   }
@@ -3075,13 +3276,17 @@ function renderConstantsList(container, query = {}) {
 }
 function renderConstantDetail(container, name) {
   clear(container);
+  if (name.includes("*") || name.includes("?")) {
+    navigate(`/constants?q=${encodeURIComponent(name)}`);
+    return;
+  }
   const c = findConst(name);
   if (!c) {
-    renderNotFound(container, "Constant", name, "#/constants", "All constants");
+    renderNotFound(container, "Constant", name, buildHash("/constants"), "All constants", findSimilarNames(name));
     return;
   }
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: "#/constants", className: "back-link" }, "← All constants"));
+  pg.appendChild(el("a", { href: buildHash("/constants"), className: "back-link" }, "← All constants"));
   pg.appendChild(el("h2", { className: "mono" }, c.name));
   const valContent = el("div", {});
   valContent.appendChild(el("div", { className: "const-big-value" }, el("span", { className: "const-decimal" }, String(c.value)), el("span", { className: "const-hex" }, c.hex)));
@@ -3163,13 +3368,17 @@ function renderConstantDetail(container, name) {
 }
 function renderEnumDetail(container, name) {
   clear(container);
+  if (name.includes("*") || name.includes("?")) {
+    navigate(`/constants?q=${encodeURIComponent(name)}`);
+    return;
+  }
   const e = findEnum(name);
   if (!e) {
-    renderNotFound(container, "Enum", name, "#/constants", "All constants");
+    renderNotFound(container, "Enum", name, buildHash("/constants"), "All constants", findSimilarNames(name));
     return;
   }
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: "#/constants", className: "back-link" }, "← All constants"));
+  pg.appendChild(el("a", { href: buildHash("/constants"), className: "back-link" }, "← All constants"));
   pg.appendChild(el("h2", { className: "mono" }, e.name));
   const tags = el("div", { className: "tag-row" });
   tags.appendChild(badge(`${e.constants.length} variants`, "tag-fields"));
@@ -3206,6 +3415,77 @@ function renderEnumDetail(container, name) {
   container.appendChild(pg);
 }
 
+// src/views/lookup.ts
+function renderLookup(container, name) {
+  clear(container);
+  if (name.includes("*") || name.includes("?")) {
+    navigate(`/functions?q=${encodeURIComponent(name)}`);
+    return;
+  }
+  const matches = [];
+  const fn = findFunc(name);
+  if (fn)
+    matches.push({ kind: "function", name: fn.name });
+  const typeResult = flexFindType(name);
+  if (typeResult)
+    matches.push({ kind: "type", name: typeResult.canonical });
+  const c = findConst(name);
+  if (c)
+    matches.push({ kind: "constant", name: c.name });
+  const e = findEnum(name);
+  if (e)
+    matches.push({ kind: "enum", name: e.name });
+  if (matches.length === 1) {
+    const m = matches[0];
+    switch (m.kind) {
+      case "function":
+        navigate(`/functions/${encodeURIComponent(m.name)}`);
+        return;
+      case "type":
+        navigate(`/types/${encodeURIComponent(m.name)}`);
+        return;
+      case "constant":
+        navigate(`/constants/${encodeURIComponent(m.name)}`);
+        return;
+      case "enum":
+        navigate(`/constants/enum/${encodeURIComponent(m.name)}`);
+        return;
+    }
+  }
+  if (matches.length > 1) {
+    const pg = el("div", { className: "detail-view" });
+    pg.appendChild(el("h2", {}, `Multiple matches for "${name}"`));
+    pg.appendChild(el("p", { className: "dim" }, "This identifier exists in multiple categories:"));
+    const list = el("div", { className: "suggestions" });
+    for (const m of matches) {
+      const href = m.kind === "function" ? buildHash(`/functions/${encodeURIComponent(m.name)}`) : m.kind === "type" ? buildHash(`/types/${encodeURIComponent(m.name)}`) : m.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(m.name)}`) : buildHash(`/constants/${encodeURIComponent(m.name)}`);
+      const chip = el("span", { className: "suggestion-chip" }, el("a", { href, className: "xref" }, m.name));
+      chip.appendChild(el("span", { className: "dim" }, ` (${m.kind})`));
+      list.appendChild(chip);
+    }
+    pg.appendChild(list);
+    container.appendChild(pg);
+    return;
+  }
+  const results = searchAll(name, 50);
+  if (results.length > 0) {
+    const pg = el("div", { className: "detail-view" });
+    pg.appendChild(el("h2", {}, `Search results for "${name}"`));
+    const list = el("div", { className: "lookup-results" });
+    for (const r of results) {
+      const href = r.kind === "function" ? buildHash(`/functions/${encodeURIComponent(r.name)}`) : r.kind === "type" ? buildHash(`/types/${encodeURIComponent(r.name)}`) : r.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(r.name)}`) : buildHash(`/constants/${encodeURIComponent(r.name)}`);
+      const row = el("div", { className: "lookup-result-item" });
+      row.appendChild(badge(r.kind, `search-badge-${r.kind === "constant" ? "const" : r.kind}`));
+      row.appendChild(el("a", { href, className: "xref" }, r.name));
+      list.appendChild(row);
+    }
+    pg.appendChild(list);
+    container.appendChild(pg);
+    return;
+  }
+  renderNotFound(container, "Identifier", name, buildHash("/"), "Home", findSimilarNames(name));
+}
+
 // src/main.ts
 var content = () => $("#content");
 function setActiveNav(name) {
@@ -3213,10 +3493,23 @@ function setActiveNav(name) {
     a.classList.toggle("active", a.getAttribute("data-view") === name);
   }
 }
+function parseInitialQuery() {
+  const raw = window.location.hash.slice(1) || "/";
+  const [, qs] = raw.split("?");
+  if (!qs)
+    return {};
+  const params = {};
+  for (const [k, v] of new URLSearchParams(qs))
+    params[k] = v;
+  return params;
+}
 async function init() {
   setupTheme();
+  const initialParams = parseInitialQuery();
+  const initialDs = initialParams.ds;
+  const initialArch = initialParams.arch;
   try {
-    await loadData();
+    await loadData(initialDs || undefined, initialArch || undefined);
   } catch (e) {
     $("#loading").innerHTML = `<div class="error">Failed to load data: ${e}</div>`;
     return;
@@ -3236,7 +3529,7 @@ async function init() {
   });
   route("/functions/:name", (p) => {
     setActiveNav("functions");
-    renderFunctionDetail(content(), decodeURIComponent(p.name));
+    renderFunctionDetail(content(), p.name);
   });
   route("/types", (_, q) => {
     setActiveNav("types");
@@ -3248,7 +3541,7 @@ async function init() {
   });
   route("/types/:name", (p) => {
     setActiveNav("types");
-    renderTypeDetail(content(), decodeURIComponent(p.name));
+    renderTypeDetail(content(), p.name);
   });
   route("/constants", (_, q) => {
     setActiveNav("constants");
@@ -3256,11 +3549,14 @@ async function init() {
   });
   route("/constants/:name", (p) => {
     setActiveNav("constants");
-    renderConstantDetail(content(), decodeURIComponent(p.name));
+    renderConstantDetail(content(), p.name);
   });
   route("/constants/enum/:name", (p) => {
     setActiveNav("constants");
-    renderEnumDetail(content(), decodeURIComponent(p.name));
+    renderEnumDetail(content(), p.name);
+  });
+  route("/q/:name", (p) => {
+    renderLookup(content(), p.name);
   });
   startRouter();
 }

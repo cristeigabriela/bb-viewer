@@ -1,22 +1,30 @@
-import { loadData, getAvailableDatasets, getAvailableArchs, getCurrentDataset, getCurrentArch } from "./data";
+import { getAvailableDatasets, getAvailableArchs, getCurrentDataset, getCurrentArch } from "./data";
+import { navigate, setOnDatasetChange } from "./router";
 import { $, $$, el } from "./dom";
 
-async function reloadAndRedispatch(): Promise<void> {
-  const content = $("#content")!;
-  const loading = el("div", { className: "dataset-loading" }, "Switching...");
-  content.appendChild(loading);
-  try {
-    await loadData(getCurrentDataset(), getCurrentArch());
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  } catch (e) {
-    loading.textContent = `Failed to load data: ${e}`;
-    loading.className = "error";
-  }
+/** Always include ds/arch explicitly — prevents injectContext from
+ *  re-adding the stale current values before the switch takes effect. */
+function buildSwitchParams(ds: string, arch: string): string {
+  const params = new URLSearchParams();
+  params.set("ds", ds);
+  params.set("arch", arch);
+  return `?${params}`;
 }
 
 export function setupDatasetSwitcher(): void {
   const dsButtons = $$(".dataset-btn");
   const archContainer = $(".arch-switcher")!;
+
+  function syncButtonStates() {
+    const ds = getCurrentDataset();
+    const arch = getCurrentArch();
+    for (const btn of dsButtons) {
+      btn.classList.toggle("active", btn.getAttribute("data-dataset") === ds);
+    }
+    for (const btn of archContainer.querySelectorAll(".arch-btn")) {
+      btn.classList.toggle("active", btn.getAttribute("data-arch") === arch);
+    }
+  }
 
   async function refreshArchButtons() {
     archContainer.innerHTML = "";
@@ -31,12 +39,11 @@ export function setupDatasetSwitcher(): void {
         className: `arch-btn ${arch === getCurrentArch() ? "active" : ""}`,
         "data-arch": arch,
       }, arch);
-      btn.addEventListener("click", async () => {
+      btn.addEventListener("click", () => {
         if (arch === getCurrentArch()) return;
-        archContainer.querySelectorAll(".arch-btn").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        await loadData(undefined, arch);
-        await reloadAndRedispatch();
+        const hash = window.location.hash.slice(1) || "/";
+        const [path] = hash.split("?");
+        navigate(path + buildSwitchParams(getCurrentDataset(), arch));
       });
       archContainer.appendChild(btn);
     }
@@ -46,13 +53,21 @@ export function setupDatasetSwitcher(): void {
     btn.addEventListener("click", async () => {
       const dataset = btn.getAttribute("data-dataset") as "winsdk" | "phnt";
       if (dataset === getCurrentDataset()) return;
-      dsButtons.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      await loadData(dataset);
-      await refreshArchButtons();
-      await reloadAndRedispatch();
+      const hash = window.location.hash.slice(1) || "/";
+      const [path] = hash.split("?");
+      navigate(path + buildSwitchParams(dataset, getCurrentArch()));
     });
   }
+
+  // Sync button states when dataset changes (via URL navigation or back/forward)
+  setOnDatasetChange(async () => {
+    syncButtonStates();
+    await refreshArchButtons();
+    syncButtonStates();
+  });
+
+  // Sync on initial load (URL may already specify a non-default dataset/arch)
+  syncButtonStates();
 
   getAvailableDatasets().then(available => {
     for (const btn of dsButtons) {
@@ -65,5 +80,6 @@ export function setupDatasetSwitcher(): void {
     }
   });
 
-  refreshArchButtons();
+  // refreshArchButtons is async — sync again after arch buttons are created
+  refreshArchButtons().then(syncButtonStates);
 }

@@ -1,5 +1,19 @@
 import { el, clear } from "../dom";
+import { buildHash } from "../router";
+import { getCurrentDataset, getCurrentArch } from "../data";
 import { debounce } from "../utils";
+
+/** Sync all view-specific filter state to the URL without triggering hashchange.
+ *  Falsy values are omitted to keep URLs clean. ds/arch always included. */
+export function syncViewUrl(basePath: string, viewParams: Record<string, string>): void {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(viewParams)) {
+    if (v) params.set(k, v);
+  }
+  params.set("ds", getCurrentDataset());
+  params.set("arch", getCurrentArch());
+  history.replaceState(null, "", `#${basePath}?${params}`);
+}
 
 /* ── Search input with regex toggle ── */
 
@@ -13,14 +27,15 @@ export function buildSearchInput(
   placeholder: string,
   onChange: (query: string, regex: boolean) => void,
   initial = "",
+  initialRegex = false,
 ): SearchInputHandle {
-  let useRegex = false;
+  let useRegex = initialRegex;
   const wrap = el("div", { className: "search-with-toggle" });
   const input = el("input", {
     type: "text", placeholder, className: "search-input"
   }) as HTMLInputElement;
   input.value = initial;
-  const regexBtn = el("button", { className: "regex-toggle-btn" }, ".*");
+  const regexBtn = el("button", { className: `regex-toggle-btn${useRegex ? " active" : ""}` }, ".*");
   regexBtn.title = "Toggle regex mode";
   regexBtn.addEventListener("click", () => {
     useRegex = !useRegex;
@@ -107,12 +122,34 @@ export function renderFilterChips(container: HTMLElement, chips: FilterChip[]): 
 
 /* ── Not found page ── */
 
-export function renderNotFound(container: Element, entity: string, name: string, backHref: string, backLabel: string): boolean {
-  container.appendChild(el("div", { className: "not-found" },
+export function renderNotFound(
+  container: Element, entity: string, name: string,
+  backHref: string, backLabel: string,
+  suggestions?: Array<{ kind: string; name: string }>,
+): boolean {
+  const enc = (s: string) => encodeURIComponent(s);
+  const div = el("div", { className: "not-found" },
     el("h2", {}, `${entity} not found`),
     el("p", {}, `No ${entity.toLowerCase()} named "${name}" was found.`),
-    el("a", { href: backHref }, `\u2190 ${backLabel}`),
-  ));
+  );
+  if (suggestions && suggestions.length > 0) {
+    div.appendChild(el("p", { className: "dim" }, "Did you mean?"));
+    const list = el("div", { className: "suggestions" });
+    for (const s of suggestions) {
+      const href = s.kind === "function" ? buildHash(`/functions/${enc(s.name)}`)
+        : s.kind === "type" ? buildHash(`/types/${enc(s.name)}`)
+        : s.kind === "enum" ? buildHash(`/constants/enum/${enc(s.name)}`)
+        : buildHash(`/constants/${enc(s.name)}`);
+      const chip = el("span", { className: "suggestion-chip" },
+        el("a", { href, className: "xref" }, s.name),
+      );
+      chip.appendChild(el("span", { className: "dim" }, ` (${s.kind})`));
+      list.appendChild(chip);
+    }
+    div.appendChild(list);
+  }
+  div.appendChild(el("a", { href: backHref }, `\u2190 ${backLabel}`));
+  container.appendChild(div);
   return false;
 }
 
