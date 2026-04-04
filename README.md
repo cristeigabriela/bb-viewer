@@ -67,6 +67,33 @@ dark/light mode with 5 accent colors (amber, green, cyan, red, white). terminal 
 
 switch between windows sdk and phnt headers, across amd64, x86, arm, and arm64 architectures from the navbar.
 
+## routes
+
+all routes use the hash-based router (`#/path?params`). two global query params — `ds` (dataset: `winsdk` or `phnt`) and `arch` (`amd64`, `x86`, `arm`, `arm64`) — are injected into every URL automatically.
+
+| route | description |
+|---|---|
+| `#/` | home dashboard with stat cards and bar charts |
+| `#/functions` | function list with search, filters, and sorting |
+| `#/functions/:name` | function detail — c prototype, abi layout, msdn metadata, known param values |
+| `#/types` | type list with search, filters, and sorting |
+| `#/types/graph` | interactive type relationship graph (cytoscape.js) |
+| `#/types/:name` | type detail — c definition, memory layout, field table, cross-references |
+| `#/constants` | constants/enums list with search, filters, and tab switching |
+| `#/constants/:name` | constant detail — value, hex, c expression, binary breakdown, composition |
+| `#/constants/enum/:name` | enum detail — member table with values |
+| `#/q/:name` | universal lookup — searches all entity types, auto-redirects on single match, shows disambiguation for multiple |
+
+### list view query params
+
+**functions** (`#/functions`): `q`, `regex`, `header`, `dll`, `returnType`, `minParams`, `maxParams`, `ptrDepth`, `minClient`, `minServer`, `exported`, `sort`, `sortDir`, `page`
+
+**types** (`#/types`): `q`, `regex`, `header`, `minSize`, `maxSize`, `hasFields`, `sort`, `sortDir`, `page`
+
+**constants** (`#/constants`): `q`, `regex`, `header`, `tab` (`macros` or `enums`), `sort`, `sortDir`, `page`
+
+multi-value filters (`header`, `dll`, `returnType`) are comma-separated. params at default values are omitted from the URL.
+
 ## getting started
 
 ```powershell
