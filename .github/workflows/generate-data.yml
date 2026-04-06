@@ -15,12 +15,14 @@ jobs:
 
       - name: Install Windows SDK
         run: |
-          winget install --source winget --exact --id Microsoft.WindowsSDK.10.0.26100 --silent --accept-package-agreements --accept-source-agreements || echo "SDK may already be installed — continuing"
+          winget install --source winget --exact --id Microsoft.WindowsSDK.10.0.26100 --silent --accept-package-agreements --accept-source-agreements
+          if ($LASTEXITCODE -ne 0) { Write-Host "winget exited $LASTEXITCODE — SDK may already be installed, continuing"; $LASTEXITCODE = 0 }
         shell: pwsh
 
       - name: Install WDK
         run: |
-          winget install --source winget --exact --id Microsoft.WindowsWDK.10.0.26100 --silent --accept-package-agreements --accept-source-agreements || echo "WDK install failed — kernel mode data may be skipped"
+          winget install --source winget --exact --id Microsoft.WindowsWDK.10.0.26100 --silent --accept-package-agreements --accept-source-agreements
+          if ($LASTEXITCODE -ne 0) { Write-Host "winget exited $LASTEXITCODE — WDK may already be installed, continuing"; $LASTEXITCODE = 0 }
         shell: pwsh
 
       - name: Generate data (user + kernel, all datasets, all archs)
