@@ -1,0 +1,48 @@
+name: Generate Data
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Windows SDK
+        run: |
+          winget install --source winget --exact --id Microsoft.WindowsSDK.10.0.26100 --silent --accept-package-agreements --accept-source-agreements || echo "SDK may already be installed — continuing"
+        shell: pwsh
+
+      - name: Install WDK
+        run: |
+          winget install --source winget --exact --id Microsoft.WindowsWDK.10.0.26100 --silent --accept-package-agreements --accept-source-agreements || echo "WDK install failed — kernel mode data may be skipped"
+        shell: pwsh
+
+      - name: Generate data (user + kernel, all datasets, all archs)
+        run: .\generate-data.ps1
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install
+
+      - name: Build type graphs
+        run: bun run build:graph
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet && echo "No data changes" && exit 0
+          git commit -m "chore: regenerate data (user + kernel)"
+          git push
+        shell: bash

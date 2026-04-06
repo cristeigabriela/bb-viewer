@@ -1,17 +1,21 @@
-# Generate bb-viewer JSON data for all datasets and architectures.
+# Generate bb-viewer JSON data for all datasets, architectures, and modes.
 #
 # Usage:
-#   .\generate-data.ps1                          # all datasets, all archs
+#   .\generate-data.ps1                          # all datasets, all archs, all modes
 #   .\generate-data.ps1 -Dataset phnt            # only phnt
 #   .\generate-data.ps1 -Arch amd64             # only amd64
-#   .\generate-data.ps1 -Dataset winsdk -Arch x86
+#   .\generate-data.ps1 -Mode kernel            # only kernel mode
+#   .\generate-data.ps1 -Dataset winsdk -Arch x86 -Mode user
 #
 # Requires: Windows SDK installed. Auto-detects SDK path from registry.
+# Kernel mode additionally requires the WDK (install via winget:
+#   winget install --exact --id Microsoft.WindowsWDK.10.0.26100)
 
 param(
     [string]$Dataset = "",
     [string]$Arch = "",
-    [string]$BbRoot = "C:\dev\rust\bb\bb"
+    [string]$Mode = "",
+    [string]$BbBinDir = (Join-Path $env:TEMP "bb-bin")
 )
 
 $ErrorActionPreference = "Continue"
@@ -19,6 +23,10 @@ $DataDir = Join-Path $PSScriptRoot "data"
 
 $Datasets = @("winsdk", "phnt")
 $Archs = @("amd64", "x86", "arm", "arm64")
+$Modes = @(
+    @{ Name = "user";   Flag = $null;         Suffix = "" },
+    @{ Name = "kernel"; Flag = "--mode kernel"; Suffix = "-kernel" }
+)
 $Tools = @(
     @{ Tool = "bb-funcs"; File = "funcs" },
     @{ Tool = "bb-types"; File = "types" },
@@ -40,49 +48,66 @@ if (-not $env:WindowsSdkDir) {
     }
 }
 
-# Build bb tools
-Write-Host "building bb tools..."
-Push-Location $BbRoot
-$buildOutput = cmd /c "cargo build --release --bin bb-funcs --bin bb-types --bin bb-consts 2>&1"
-$buildOutput | Select-Object -Last 3 | Write-Host
-Pop-Location
+# Download latest bb tools from GitHub releases
+New-Item -ItemType Directory -Path $BbBinDir -Force | Out-Null
+Write-Host "downloading latest bb tools to $BbBinDir..."
+foreach ($entry in $Tools) {
+    $asset = "$($entry.Tool).exe"
+    Write-Host -NoNewline "  $asset ... "
+    gh release download --repo cristeigabriela/bb --pattern $asset --dir $BbBinDir --clobber 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "failed to download $asset"
+        exit 1
+    }
+    Write-Host "ok"
+}
 
 $failed = 0
 $total = 0
 
-foreach ($ds in $Datasets) {
-    if ($Dataset -and $ds -ne $Dataset) { continue }
+foreach ($m in $Modes) {
+    if ($Mode -and $m.Name -ne $Mode) { continue }
 
-    foreach ($arch in $Archs) {
-        if ($Arch -and $arch -ne $Arch) { continue }
+    foreach ($ds in $Datasets) {
+        if ($Dataset -and $ds -ne $Dataset) { continue }
 
-        $dir = Join-Path $DataDir "$ds\$arch"
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        foreach ($a in $Archs) {
+            if ($Arch -and $a -ne $Arch) { continue }
 
-        foreach ($entry in $Tools) {
-            $tool = $entry.Tool
-            $fname = $entry.File
-            $outfile = Join-Path $dir "$fname.json"
-            $total++
+            $dir = Join-Path $DataDir "$ds$($m.Suffix)\$a"
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
 
-            Write-Host -NoNewline "  $ds/$arch/$fname ... "
+            foreach ($entry in $Tools) {
+                $tool = $entry.Tool
+                $fname = $entry.File
+                $outfile = Join-Path $dir "$fname.json"
+                $total++
 
-            $exe = Join-Path $BbRoot "target\release\$tool.exe"
-            try {
-                $proc = Start-Process -FilePath $exe -ArgumentList "--$ds","--arch","$arch","--json" -RedirectStandardOutput $outfile -RedirectStandardError "NUL" -NoNewWindow -Wait -PassThru
-                if ($proc.ExitCode -ne 0) { throw "exit code $($proc.ExitCode)" }
-                $size = (Get-Item $outfile).Length
-                if ($size -eq 0) {
-                    throw "empty output"
+                $modeLabel = if ($m.Suffix) { " [$($m.Name)]" } else { "" }
+                Write-Host -NoNewline "  $ds/$a/$fname$modeLabel ... "
+
+                $exe = Join-Path $BbBinDir "$tool.exe"
+                $args = @("--$ds", "--arch", "$a", "--json")
+                if ($m.Flag) {
+                    $args += $m.Flag.Split(" ")
                 }
-                $sizeStr = if ($size -gt 1MB) { "{0:N1} MB" -f ($size / 1MB) }
-                           elseif ($size -gt 1KB) { "{0:N0} KB" -f ($size / 1KB) }
-                           else { "$size B" }
-                Write-Host "ok ($sizeStr)"
-            } catch {
-                Write-Host "FAILED"
-                Remove-Item $outfile -ErrorAction SilentlyContinue
-                $failed++
+
+                try {
+                    $proc = Start-Process -FilePath $exe -ArgumentList $args -RedirectStandardOutput $outfile -RedirectStandardError "NUL" -NoNewWindow -Wait -PassThru
+                    if ($proc.ExitCode -ne 0) { throw "exit code $($proc.ExitCode)" }
+                    $size = (Get-Item $outfile).Length
+                    if ($size -eq 0) {
+                        throw "empty output"
+                    }
+                    $sizeStr = if ($size -gt 1MB) { "{0:N1} MB" -f ($size / 1MB) }
+                               elseif ($size -gt 1KB) { "{0:N0} KB" -f ($size / 1KB) }
+                               else { "$size B" }
+                    Write-Host "ok ($sizeStr)"
+                } catch {
+                    Write-Host "FAILED"
+                    Remove-Item $outfile -ErrorAction SilentlyContinue
+                    $failed++
+                }
             }
         }
     }
