@@ -1,5 +1,5 @@
 {
-  "command": "C:\\Users\\gabriela\\AppData\\Local\\Temp\\bb-bin\\bb-consts.exe --phnt --arch amd64 --json --mode kernel",
+  "command": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\bb-bin\\bb-consts.exe --phnt --arch amd64 --json --mode kernel",
   "constants": [
     {
       "expression": "1",
@@ -24,15 +24,15 @@
       "value": 1
     },
     {
-      "expression": "18",
-      "hex": "0x12",
+      "expression": "20",
+      "hex": "0x14",
       "location": {
         "column": 9,
         "file": null,
         "line": 4
       },
       "name": "__clang_major__",
-      "value": 18
+      "value": 20
     },
     {
       "expression": "1",
@@ -445,15 +445,15 @@
       "value": 8
     },
     {
-      "expression": "8",
-      "hex": "0x8",
+      "expression": "1",
+      "hex": "0x1",
       "location": {
         "column": 9,
         "file": null,
         "line": 46
       },
       "name": "__BOOL_WIDTH__",
-      "value": 8
+      "value": 1
     },
     {
       "expression": "16",
@@ -890,7 +890,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 109
+        "line": 111
       },
       "name": "__SIG_ATOMIC_MAX__",
       "value": 2147483647
@@ -901,7 +901,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 110
+        "line": 112
       },
       "name": "__SIG_ATOMIC_WIDTH__",
       "value": 32
@@ -912,7 +912,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 119
+        "line": 122
       },
       "name": "__FLT16_HAS_DENORM__",
       "value": 1
@@ -923,7 +923,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 120
+        "line": 123
       },
       "name": "__FLT16_DIG__",
       "value": 3
@@ -934,7 +934,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 121
+        "line": 124
       },
       "name": "__FLT16_DECIMAL_DIG__",
       "value": 5
@@ -945,7 +945,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 123
+        "line": 126
       },
       "name": "__FLT16_HAS_INFINITY__",
       "value": 1
@@ -956,7 +956,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 124
+        "line": 127
       },
       "name": "__FLT16_HAS_QUIET_NAN__",
       "value": 1
@@ -967,7 +967,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 125
+        "line": 128
       },
       "name": "__FLT16_MANT_DIG__",
       "value": 11
@@ -978,7 +978,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 126
+        "line": 129
       },
       "name": "__FLT16_MAX_10_EXP__",
       "value": 4
@@ -989,7 +989,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 127
+        "line": 130
       },
       "name": "__FLT16_MAX_EXP__",
       "value": 16
@@ -1000,7 +1000,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 129
+        "line": 132
       },
       "name": "__FLT16_MIN_10_EXP__",
       "value": -4
@@ -1011,7 +1011,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 130
+        "line": 133
       },
       "name": "__FLT16_MIN_EXP__",
       "value": -13
@@ -1022,7 +1022,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 133
+        "line": 137
       },
       "name": "__FLT_HAS_DENORM__",
       "value": 1
@@ -1033,7 +1033,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 134
+        "line": 138
       },
       "name": "__FLT_DIG__",
       "value": 6
@@ -1044,7 +1044,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 135
+        "line": 139
       },
       "name": "__FLT_DECIMAL_DIG__",
       "value": 9
@@ -1055,7 +1055,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 137
+        "line": 141
       },
       "name": "__FLT_HAS_INFINITY__",
       "value": 1
@@ -1066,7 +1066,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 138
+        "line": 142
       },
       "name": "__FLT_HAS_QUIET_NAN__",
       "value": 1
@@ -1077,7 +1077,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 139
+        "line": 143
       },
       "name": "__FLT_MANT_DIG__",
       "value": 24
@@ -1088,7 +1088,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 140
+        "line": 144
       },
       "name": "__FLT_MAX_10_EXP__",
       "value": 38
@@ -1099,7 +1099,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 141
+        "line": 145
       },
       "name": "__FLT_MAX_EXP__",
       "value": 128
@@ -1110,7 +1110,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 143
+        "line": 147
       },
       "name": "__FLT_MIN_10_EXP__",
       "value": -37
@@ -1121,7 +1121,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 144
+        "line": 148
       },
       "name": "__FLT_MIN_EXP__",
       "value": -125
@@ -1132,7 +1132,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 147
+        "line": 152
       },
       "name": "__DBL_HAS_DENORM__",
       "value": 1
@@ -1143,7 +1143,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 148
+        "line": 153
       },
       "name": "__DBL_DIG__",
       "value": 15
@@ -1154,7 +1154,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 149
+        "line": 154
       },
       "name": "__DBL_DECIMAL_DIG__",
       "value": 17
@@ -1165,7 +1165,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 151
+        "line": 156
       },
       "name": "__DBL_HAS_INFINITY__",
       "value": 1
@@ -1176,7 +1176,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 152
+        "line": 157
       },
       "name": "__DBL_HAS_QUIET_NAN__",
       "value": 1
@@ -1187,7 +1187,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 153
+        "line": 158
       },
       "name": "__DBL_MANT_DIG__",
       "value": 53
@@ -1198,7 +1198,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 154
+        "line": 159
       },
       "name": "__DBL_MAX_10_EXP__",
       "value": 308
@@ -1209,7 +1209,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 155
+        "line": 160
       },
       "name": "__DBL_MAX_EXP__",
       "value": 1024
@@ -1220,7 +1220,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 157
+        "line": 162
       },
       "name": "__DBL_MIN_10_EXP__",
       "value": -307
@@ -1231,7 +1231,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 158
+        "line": 163
       },
       "name": "__DBL_MIN_EXP__",
       "value": -1021
@@ -1242,7 +1242,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 161
+        "line": 167
       },
       "name": "__LDBL_HAS_DENORM__",
       "value": 1
@@ -1253,7 +1253,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 162
+        "line": 168
       },
       "name": "__LDBL_DIG__",
       "value": 15
@@ -1264,7 +1264,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 163
+        "line": 169
       },
       "name": "__LDBL_DECIMAL_DIG__",
       "value": 17
@@ -1275,7 +1275,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 165
+        "line": 171
       },
       "name": "__LDBL_HAS_INFINITY__",
       "value": 1
@@ -1286,7 +1286,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 166
+        "line": 172
       },
       "name": "__LDBL_HAS_QUIET_NAN__",
       "value": 1
@@ -1297,7 +1297,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 167
+        "line": 173
       },
       "name": "__LDBL_MANT_DIG__",
       "value": 53
@@ -1308,7 +1308,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 168
+        "line": 174
       },
       "name": "__LDBL_MAX_10_EXP__",
       "value": 308
@@ -1319,7 +1319,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 169
+        "line": 175
       },
       "name": "__LDBL_MAX_EXP__",
       "value": 1024
@@ -1330,7 +1330,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 171
+        "line": 177
       },
       "name": "__LDBL_MIN_10_EXP__",
       "value": -307
@@ -1341,7 +1341,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 172
+        "line": 178
       },
       "name": "__LDBL_MIN_EXP__",
       "value": -1021
@@ -1352,7 +1352,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 174
+        "line": 180
       },
       "name": "__POINTER_WIDTH__",
       "value": 64
@@ -1363,7 +1363,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 175
+        "line": 181
       },
       "name": "__BIGGEST_ALIGNMENT__",
       "value": 16
@@ -1374,7 +1374,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 176
+        "line": 182
       },
       "name": "__WCHAR_UNSIGNED__",
       "value": 1
@@ -1385,7 +1385,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 177
+        "line": 183
       },
       "name": "__WINT_UNSIGNED__",
       "value": 1
@@ -1396,7 +1396,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 200
+        "line": 211
       },
       "name": "__UINT8_MAX__",
       "value": 255
@@ -1407,7 +1407,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 201
+        "line": 212
       },
       "name": "__INT8_MAX__",
       "value": 127
@@ -1418,7 +1418,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 208
+        "line": 220
       },
       "name": "__UINT16_MAX__",
       "value": 65535
@@ -1429,7 +1429,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 209
+        "line": 221
       },
       "name": "__INT16_MAX__",
       "value": 32767
@@ -1440,7 +1440,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 216
+        "line": 229
       },
       "name": "__UINT32_MAX__",
       "value": 4294967295
@@ -1451,7 +1451,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 217
+        "line": 230
       },
       "name": "__INT32_MAX__",
       "value": 2147483647
@@ -1462,7 +1462,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 224
+        "line": 238
       },
       "name": "__UINT64_MAX__",
       "value": -1
@@ -1473,7 +1473,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 225
+        "line": 239
       },
       "name": "__INT64_MAX__",
       "value": 9223372036854775807
@@ -1484,7 +1484,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 227
+        "line": 241
       },
       "name": "__INT_LEAST8_MAX__",
       "value": 127
@@ -1495,7 +1495,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 228
+        "line": 242
       },
       "name": "__INT_LEAST8_WIDTH__",
       "value": 8
@@ -1506,7 +1506,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 232
+        "line": 246
       },
       "name": "__UINT_LEAST8_MAX__",
       "value": 255
@@ -1517,7 +1517,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 238
+        "line": 252
       },
       "name": "__INT_LEAST16_MAX__",
       "value": 32767
@@ -1528,7 +1528,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 239
+        "line": 253
       },
       "name": "__INT_LEAST16_WIDTH__",
       "value": 16
@@ -1539,7 +1539,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 243
+        "line": 257
       },
       "name": "__UINT_LEAST16_MAX__",
       "value": 65535
@@ -1550,7 +1550,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 249
+        "line": 263
       },
       "name": "__INT_LEAST32_MAX__",
       "value": 2147483647
@@ -1561,7 +1561,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 250
+        "line": 264
       },
       "name": "__INT_LEAST32_WIDTH__",
       "value": 32
@@ -1572,7 +1572,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 254
+        "line": 268
       },
       "name": "__UINT_LEAST32_MAX__",
       "value": 4294967295
@@ -1583,7 +1583,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 260
+        "line": 274
       },
       "name": "__INT_LEAST64_MAX__",
       "value": 9223372036854775807
@@ -1594,7 +1594,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 261
+        "line": 275
       },
       "name": "__INT_LEAST64_WIDTH__",
       "value": 64
@@ -1605,7 +1605,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 265
+        "line": 279
       },
       "name": "__UINT_LEAST64_MAX__",
       "value": -1
@@ -1616,7 +1616,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 271
+        "line": 285
       },
       "name": "__INT_FAST8_MAX__",
       "value": 127
@@ -1627,7 +1627,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 272
+        "line": 286
       },
       "name": "__INT_FAST8_WIDTH__",
       "value": 8
@@ -1638,7 +1638,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 276
+        "line": 290
       },
       "name": "__UINT_FAST8_MAX__",
       "value": 255
@@ -1649,7 +1649,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 282
+        "line": 296
       },
       "name": "__INT_FAST16_MAX__",
       "value": 32767
@@ -1660,7 +1660,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 283
+        "line": 297
       },
       "name": "__INT_FAST16_WIDTH__",
       "value": 16
@@ -1671,7 +1671,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 287
+        "line": 301
       },
       "name": "__UINT_FAST16_MAX__",
       "value": 65535
@@ -1682,7 +1682,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 293
+        "line": 307
       },
       "name": "__INT_FAST32_MAX__",
       "value": 2147483647
@@ -1693,7 +1693,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 294
+        "line": 308
       },
       "name": "__INT_FAST32_WIDTH__",
       "value": 32
@@ -1704,7 +1704,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 298
+        "line": 312
       },
       "name": "__UINT_FAST32_MAX__",
       "value": 4294967295
@@ -1715,7 +1715,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 304
+        "line": 318
       },
       "name": "__INT_FAST64_MAX__",
       "value": 9223372036854775807
@@ -1726,7 +1726,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 305
+        "line": 319
       },
       "name": "__INT_FAST64_WIDTH__",
       "value": 64
@@ -1737,7 +1737,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 309
+        "line": 323
       },
       "name": "__UINT_FAST64_MAX__",
       "value": -1
@@ -1748,10 +1748,32 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 315
+        "line": 329
       },
       "name": "__FINITE_MATH_ONLY__",
       "value": 0
+    },
+    {
+      "expression": "64",
+      "hex": "0x40",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 330
+      },
+      "name": "__GCC_DESTRUCTIVE_SIZE",
+      "value": 64
+    },
+    {
+      "expression": "64",
+      "hex": "0x40",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 331
+      },
+      "name": "__GCC_CONSTRUCTIVE_SIZE",
+      "value": 64
     },
     {
       "expression": "2",
@@ -1759,7 +1781,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 316
+        "line": 334
       },
       "name": "__CLANG_ATOMIC_BOOL_LOCK_FREE",
       "value": 2
@@ -1770,7 +1792,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 317
+        "line": 335
       },
       "name": "__CLANG_ATOMIC_CHAR_LOCK_FREE",
       "value": 2
@@ -1781,7 +1803,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 318
+        "line": 336
       },
       "name": "__CLANG_ATOMIC_CHAR16_T_LOCK_FREE",
       "value": 2
@@ -1792,7 +1814,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 319
+        "line": 337
       },
       "name": "__CLANG_ATOMIC_CHAR32_T_LOCK_FREE",
       "value": 2
@@ -1803,7 +1825,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 320
+        "line": 338
       },
       "name": "__CLANG_ATOMIC_WCHAR_T_LOCK_FREE",
       "value": 2
@@ -1814,7 +1836,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 321
+        "line": 339
       },
       "name": "__CLANG_ATOMIC_SHORT_LOCK_FREE",
       "value": 2
@@ -1825,7 +1847,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 322
+        "line": 340
       },
       "name": "__CLANG_ATOMIC_INT_LOCK_FREE",
       "value": 2
@@ -1836,7 +1858,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 323
+        "line": 341
       },
       "name": "__CLANG_ATOMIC_LONG_LOCK_FREE",
       "value": 2
@@ -1847,7 +1869,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 324
+        "line": 342
       },
       "name": "__CLANG_ATOMIC_LLONG_LOCK_FREE",
       "value": 2
@@ -1858,7 +1880,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 325
+        "line": 343
       },
       "name": "__CLANG_ATOMIC_POINTER_LOCK_FREE",
       "value": 2
@@ -1869,7 +1891,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 326
+        "line": 344
       },
       "name": "__NO_INLINE__",
       "value": 1
@@ -1880,7 +1902,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 327
+        "line": 345
       },
       "name": "__PIC__",
       "value": 2
@@ -1891,7 +1913,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 328
+        "line": 346
       },
       "name": "__pic__",
       "value": 2
@@ -1902,7 +1924,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 329
+        "line": 347
       },
       "name": "__FLT_RADIX__",
       "value": 2
@@ -1916,7 +1938,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 330
+        "line": 348
       },
       "name": "__DECIMAL_DIG__",
       "value": 17
@@ -1927,7 +1949,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 331
+        "line": 349
       },
       "name": "__GCC_ASM_FLAG_OUTPUTS__",
       "value": 1
@@ -1938,7 +1960,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 332
+        "line": 350
       },
       "name": "__code_model_small__",
       "value": 1
@@ -1949,7 +1971,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 333
+        "line": 351
       },
       "name": "__amd64__",
       "value": 1
@@ -1960,7 +1982,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 334
+        "line": 352
       },
       "name": "__amd64",
       "value": 1
@@ -1971,7 +1993,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 335
+        "line": 353
       },
       "name": "__x86_64",
       "value": 1
@@ -1982,7 +2004,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 336
+        "line": 354
       },
       "name": "__x86_64__",
       "value": 1
@@ -1993,7 +2015,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 337
+        "line": 355
       },
       "name": "__SEG_GS",
       "value": 1
@@ -2004,7 +2026,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 338
+        "line": 356
       },
       "name": "__SEG_FS",
       "value": 1
@@ -2015,7 +2037,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 341
+        "line": 359
       },
       "name": "__k8",
       "value": 1
@@ -2026,7 +2048,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 342
+        "line": 360
       },
       "name": "__k8__",
       "value": 1
@@ -2037,7 +2059,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 343
+        "line": 361
       },
       "name": "__tune_k8__",
       "value": 1
@@ -2048,7 +2070,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 345
+        "line": 363
       },
       "name": "__NO_MATH_INLINES",
       "value": 1
@@ -2059,7 +2081,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 346
+        "line": 364
       },
       "name": "__FXSR__",
       "value": 1
@@ -2070,7 +2092,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 347
+        "line": 365
       },
       "name": "__SSE2__",
       "value": 1
@@ -2081,7 +2103,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 348
+        "line": 366
       },
       "name": "__SSE2_MATH__",
       "value": 1
@@ -2092,7 +2114,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 349
+        "line": 367
       },
       "name": "__SSE__",
       "value": 1
@@ -2103,7 +2125,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 350
+        "line": 368
       },
       "name": "__SSE_MATH__",
       "value": 1
@@ -2114,7 +2136,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 351
+        "line": 369
       },
       "name": "__MMX__",
       "value": 1
@@ -2125,7 +2147,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 352
+        "line": 370
       },
       "name": "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1",
       "value": 1
@@ -2136,7 +2158,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 353
+        "line": 371
       },
       "name": "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2",
       "value": 1
@@ -2147,7 +2169,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 354
+        "line": 372
       },
       "name": "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4",
       "value": 1
@@ -2158,7 +2180,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 355
+        "line": 373
       },
       "name": "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8",
       "value": 1
@@ -2169,7 +2191,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 356
+        "line": 374
       },
       "name": "_WIN32",
       "value": 1
@@ -2180,196 +2202,9 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 357
+        "line": 375
       },
       "name": "_WIN64",
-      "value": 1
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 358
-      },
-      "name": "_M_FP_CONTRACT",
-      "value": 1
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 359
-      },
-      "name": "_M_FP_PRECISE",
-      "value": 1
-    },
-    {
-      "expression": "1944",
-      "hex": "0x798",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 360
-      },
-      "name": "_MSC_VER",
-      "value": 1944
-    },
-    {
-      "expression": "194435211",
-      "hex": "0xB96D88B",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 361
-      },
-      "name": "_MSC_FULL_VER",
-      "value": 194435211
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 362
-      },
-      "name": "_MSC_BUILD",
-      "value": 1
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 363
-      },
-      "name": "_MSVC_CONSTEXPR_ATTRIBUTE",
-      "value": 1
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 364
-      },
-      "name": "_MSC_EXTENSIONS",
-      "value": 1
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 365
-      },
-      "name": "_ISO_VOLATILE",
-      "value": 1
-    },
-    {
-      "expression": "64",
-      "hex": "0x40",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 366
-      },
-      "name": "_INTEGRAL_MAX_BITS",
-      "value": 64
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 367
-      },
-      "name": "__STDC_NO_THREADS__",
-      "value": 1
-    },
-    {
-      "expression": "65001",
-      "hex": "0xFDE9",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 368
-      },
-      "name": "_MSVC_EXECUTION_CHARACTER_SET",
-      "value": 65001
-    },
-    {
-      "expression": "100",
-      "hex": "0x64",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 369
-      },
-      "name": "_M_X64",
-      "value": 100
-    },
-    {
-      "expression": "100",
-      "hex": "0x64",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 370
-      },
-      "name": "_M_AMD64",
-      "value": 100
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 371
-      },
-      "name": "__STDC_HOSTED__",
-      "value": 1
-    },
-    {
-      "expression": "201710L",
-      "hex": "0x313EE",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 372
-      },
-      "name": "__STDC_VERSION__",
-      "value": 201710
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 373
-      },
-      "name": "__STDC_UTF_16__",
-      "value": 1
-    },
-    {
-      "expression": "1",
-      "hex": "0x1",
-      "location": {
-        "column": 9,
-        "file": null,
-        "line": 374
-      },
-      "name": "__STDC_UTF_32__",
       "value": 1
     },
     {
@@ -2380,7 +2215,7 @@
         "file": null,
         "line": 376
       },
-      "name": "_WIN32",
+      "name": "_M_FP_CONTRACT",
       "value": 1
     },
     {
@@ -2391,6 +2226,204 @@
         "file": null,
         "line": 377
       },
+      "name": "_M_FP_PRECISE",
+      "value": 1
+    },
+    {
+      "expression": "1944",
+      "hex": "0x798",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 378
+      },
+      "name": "_MSC_VER",
+      "value": 1944
+    },
+    {
+      "expression": "194435225",
+      "hex": "0xB96D899",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 379
+      },
+      "name": "_MSC_FULL_VER",
+      "value": 194435225
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 380
+      },
+      "name": "_MSC_BUILD",
+      "value": 1
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 381
+      },
+      "name": "_MSVC_CONSTEXPR_ATTRIBUTE",
+      "value": 1
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 382
+      },
+      "name": "_MSC_EXTENSIONS",
+      "value": 1
+    },
+    {
+      "expression": "64",
+      "hex": "0x40",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 383
+      },
+      "name": "_INTEGRAL_MAX_BITS",
+      "value": 64
+    },
+    {
+      "expression": "65001",
+      "hex": "0xFDE9",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 384
+      },
+      "name": "_MSVC_EXECUTION_CHARACTER_SET",
+      "value": 65001
+    },
+    {
+      "expression": "100",
+      "hex": "0x64",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 385
+      },
+      "name": "_M_X64",
+      "value": 100
+    },
+    {
+      "expression": "100",
+      "hex": "0x64",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 386
+      },
+      "name": "_M_AMD64",
+      "value": 100
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 387
+      },
+      "name": "__STDC_HOSTED__",
+      "value": 1
+    },
+    {
+      "expression": "201710L",
+      "hex": "0x313EE",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 388
+      },
+      "name": "__STDC_VERSION__",
+      "value": 201710
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 389
+      },
+      "name": "__STDC_UTF_16__",
+      "value": 1
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 390
+      },
+      "name": "__STDC_UTF_32__",
+      "value": 1
+    },
+    {
+      "expression": "0",
+      "hex": "0x0",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 391
+      },
+      "name": "__STDC_EMBED_NOT_FOUND__",
+      "value": 0
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 392
+      },
+      "name": "__STDC_EMBED_FOUND__",
+      "value": 1
+    },
+    {
+      "expression": "2",
+      "hex": "0x2",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 393
+      },
+      "name": "__STDC_EMBED_EMPTY__",
+      "value": 2
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 395
+      },
+      "name": "_WIN32",
+      "value": 1
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 9,
+        "file": null,
+        "line": 396
+      },
       "name": "_WIN64",
       "value": 1
     },
@@ -2400,7 +2433,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 378
+        "line": 397
       },
       "name": "_AMD64_",
       "value": 1
@@ -2411,7 +2444,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 379
+        "line": 398
       },
       "name": "_M_AMD64",
       "value": 100
@@ -2422,7 +2455,7 @@
       "location": {
         "column": 9,
         "file": null,
-        "line": 380
+        "line": 399
       },
       "name": "_M_X64",
       "value": 100
@@ -2803,6 +2836,17 @@
       },
       "name": "_CRT_SECURE_CPP_OVERLOAD_SECURE_NAMES_MEMORY",
       "value": 0
+    },
+    {
+      "expression": "1",
+      "hex": "0x1",
+      "location": {
+        "column": 17,
+        "file": "corecrt.h",
+        "line": 660
+      },
+      "name": "_STATIC_INLINE_UCRT_FUNCTIONS",
+      "value": 1
     },
     {
       "expression": "((0xFFFF))",

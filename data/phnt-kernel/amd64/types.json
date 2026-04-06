@@ -1,5 +1,5 @@
 {
-  "command": "C:\\Users\\gabriela\\AppData\\Local\\Temp\\bb-bin\\bb-types.exe --phnt --arch amd64 --json --mode kernel",
+  "command": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\bb-bin\\bb-types.exe --phnt --arch amd64 --json --mode kernel",
   "referenced_types": [
     {
       "fields": [],

@@ -1,5 +1,5 @@
 {
-  "command": "C:\\Users\\gabriela\\AppData\\Local\\Temp\\bb-bin\\bb-funcs.exe --phnt --arch amd64 --json --mode kernel",
+  "command": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\bb-bin\\bb-funcs.exe --phnt --arch amd64 --json --mode kernel",
   "functions": [
     {
       "arch": "Amd64",
@@ -8123,7 +8123,7 @@
       "location": {
         "column": 44,
         "file": "corecrt_memcpy_s.h",
-        "line": 39
+        "line": 40
       },
       "name": "memcpy_s",
       "params": [
@@ -8144,7 +8144,7 @@
           "location": {
             "column": 84,
             "file": "corecrt_memcpy_s.h",
-            "line": 40
+            "line": 41
           },
           "name": "_Destination",
           "pointer_depth": 1,
@@ -8168,7 +8168,7 @@
           "location": {
             "column": 84,
             "file": "corecrt_memcpy_s.h",
-            "line": 41
+            "line": 42
           },
           "name": "_DestinationSize",
           "type": "const rsize_t",
@@ -8191,7 +8191,7 @@
           "location": {
             "column": 84,
             "file": "corecrt_memcpy_s.h",
-            "line": 42
+            "line": 43
           },
           "name": "_Source",
           "pointer_depth": 1,
@@ -8215,7 +8215,7 @@
           "location": {
             "column": 84,
             "file": "corecrt_memcpy_s.h",
-            "line": 43
+            "line": 44
           },
           "name": "_SourceSize",
           "type": "const rsize_t",
@@ -8241,7 +8241,7 @@
       "location": {
         "column": 44,
         "file": "corecrt_memcpy_s.h",
-        "line": 67
+        "line": 69
       },
       "name": "memmove_s",
       "params": [
@@ -8262,7 +8262,7 @@
           "location": {
             "column": 84,
             "file": "corecrt_memcpy_s.h",
-            "line": 68
+            "line": 70
           },
           "name": "_Destination",
           "pointer_depth": 1,
@@ -8286,7 +8286,7 @@
           "location": {
             "column": 84,
             "file": "corecrt_memcpy_s.h",
-            "line": 69
+            "line": 71
           },
           "name": "_DestinationSize",
           "type": "const rsize_t",
@@ -8309,7 +8309,7 @@
           "location": {
             "column": 84,
             "file": "corecrt_memcpy_s.h",
-            "line": 70
+            "line": 72
           },
           "name": "_Source",
           "pointer_depth": 1,
@@ -8333,7 +8333,7 @@
           "location": {
             "column": 84,
             "file": "corecrt_memcpy_s.h",
-            "line": 71
+            "line": 73
           },
           "name": "_SourceSize",
           "type": "const rsize_t",
@@ -9762,7 +9762,7 @@
       "has_body": true,
       "is_dllimport": false,
       "location": {
-        "column": 38,
+        "column": 55,
         "file": "corecrt_wstring.h",
         "line": 161
       },
@@ -10360,7 +10360,7 @@
       "location": {
         "column": 40,
         "file": "corecrt_wstring.h",
-        "line": 239
+        "line": 240
       },
       "name": "_wcstok",
       "params": [
@@ -10381,7 +10381,7 @@
           "location": {
             "column": 44,
             "file": "corecrt_wstring.h",
-            "line": 240
+            "line": 241
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -10405,7 +10405,7 @@
           "location": {
             "column": 44,
             "file": "corecrt_wstring.h",
-            "line": 241
+            "line": 242
           },
           "name": "_Delimiter",
           "pointer_depth": 1,
@@ -10432,7 +10432,7 @@
       "location": {
         "column": 27,
         "file": "corecrt_wstring.h",
-        "line": 268
+        "line": 269
       },
       "name": "_wcserror",
       "params": [
@@ -10453,7 +10453,7 @@
           "location": {
             "column": 14,
             "file": "corecrt_wstring.h",
-            "line": 269
+            "line": 270
           },
           "name": "_ErrorNumber",
           "type": "int",
@@ -10479,7 +10479,7 @@
       "location": {
         "column": 26,
         "file": "corecrt_wstring.h",
-        "line": 273
+        "line": 274
       },
       "name": "_wcserror_s",
       "params": [
@@ -10500,7 +10500,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 274
+            "line": 275
           },
           "name": "_Buffer",
           "pointer_depth": 1,
@@ -10524,7 +10524,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 275
+            "line": 276
           },
           "name": "_SizeInWords",
           "type": "size_t",
@@ -10547,7 +10547,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 276
+            "line": 277
           },
           "name": "_ErrorNumber",
           "type": "int",
@@ -10573,7 +10573,7 @@
       "location": {
         "column": 27,
         "file": "corecrt_wstring.h",
-        "line": 288
+        "line": 289
       },
       "name": "__wcserror",
       "params": [
@@ -10594,7 +10594,7 @@
           "location": {
             "column": 31,
             "file": "corecrt_wstring.h",
-            "line": 289
+            "line": 290
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -10621,7 +10621,7 @@
       "location": {
         "column": 49,
         "file": "corecrt_wstring.h",
-        "line": 292
+        "line": 293
       },
       "name": "__wcserror_s",
       "params": [
@@ -10642,7 +10642,7 @@
           "location": {
             "column": 53,
             "file": "corecrt_wstring.h",
-            "line": 293
+            "line": 294
           },
           "name": "_Buffer",
           "pointer_depth": 1,
@@ -10666,7 +10666,7 @@
           "location": {
             "column": 53,
             "file": "corecrt_wstring.h",
-            "line": 294
+            "line": 295
           },
           "name": "_SizeInWords",
           "type": "size_t",
@@ -10689,7 +10689,7 @@
           "location": {
             "column": 53,
             "file": "corecrt_wstring.h",
-            "line": 295
+            "line": 296
           },
           "name": "_ErrorMessage",
           "pointer_depth": 1,
@@ -10716,7 +10716,7 @@
       "location": {
         "column": 37,
         "file": "corecrt_wstring.h",
-        "line": 304
+        "line": 305
       },
       "name": "_wcsicmp",
       "params": [
@@ -10737,7 +10737,7 @@
           "location": {
             "column": 27,
             "file": "corecrt_wstring.h",
-            "line": 305
+            "line": 306
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -10761,7 +10761,7 @@
           "location": {
             "column": 27,
             "file": "corecrt_wstring.h",
-            "line": 306
+            "line": 307
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -10788,7 +10788,7 @@
       "location": {
         "column": 37,
         "file": "corecrt_wstring.h",
-        "line": 309
+        "line": 310
       },
       "name": "_wcsicmp_l",
       "params": [
@@ -10809,7 +10809,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 310
+            "line": 311
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -10833,7 +10833,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 311
+            "line": 312
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -10857,7 +10857,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 312
+            "line": 313
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -10885,7 +10885,7 @@
       "location": {
         "column": 37,
         "file": "corecrt_wstring.h",
-        "line": 315
+        "line": 316
       },
       "name": "_wcsnicmp",
       "params": [
@@ -10906,7 +10906,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 316
+            "line": 317
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -10930,7 +10930,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 317
+            "line": 318
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -10954,7 +10954,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 318
+            "line": 319
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -10980,7 +10980,7 @@
       "location": {
         "column": 37,
         "file": "corecrt_wstring.h",
-        "line": 321
+        "line": 322
       },
       "name": "_wcsnicmp_l",
       "params": [
@@ -11001,7 +11001,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 322
+            "line": 323
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -11025,7 +11025,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 323
+            "line": 324
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -11049,7 +11049,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 324
+            "line": 325
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -11072,7 +11072,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 325
+            "line": 326
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -11100,7 +11100,7 @@
       "location": {
         "column": 45,
         "file": "corecrt_wstring.h",
-        "line": 328
+        "line": 329
       },
       "name": "_wcsnset_s",
       "params": [
@@ -11121,7 +11121,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 329
+            "line": 330
           },
           "name": "_Destination",
           "pointer_depth": 1,
@@ -11145,7 +11145,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 330
+            "line": 331
           },
           "name": "_SizeInWords",
           "type": "size_t",
@@ -11168,7 +11168,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 331
+            "line": 332
           },
           "name": "_Value",
           "type": "wchar_t",
@@ -11191,7 +11191,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 332
+            "line": 333
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -11217,7 +11217,7 @@
       "location": {
         "column": 46,
         "file": "corecrt_wstring.h",
-        "line": 343
+        "line": 344
       },
       "name": "_wcsnset",
       "params": [
@@ -11238,7 +11238,7 @@
           "location": {
             "column": 44,
             "file": "corecrt_wstring.h",
-            "line": 345
+            "line": 346
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11262,7 +11262,7 @@
           "location": {
             "column": 44,
             "file": "corecrt_wstring.h",
-            "line": 346
+            "line": 347
           },
           "name": "_Value",
           "type": "wchar_t",
@@ -11285,7 +11285,7 @@
           "location": {
             "column": 44,
             "file": "corecrt_wstring.h",
-            "line": 347
+            "line": 348
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -11311,7 +11311,7 @@
       "location": {
         "column": 27,
         "file": "corecrt_wstring.h",
-        "line": 350
+        "line": 351
       },
       "name": "_wcsrev",
       "params": [
@@ -11332,7 +11332,7 @@
           "location": {
             "column": 24,
             "file": "corecrt_wstring.h",
-            "line": 351
+            "line": 352
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11359,7 +11359,7 @@
       "location": {
         "column": 45,
         "file": "corecrt_wstring.h",
-        "line": 354
+        "line": 355
       },
       "name": "_wcsset_s",
       "params": [
@@ -11380,7 +11380,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 355
+            "line": 356
           },
           "name": "_Destination",
           "pointer_depth": 1,
@@ -11404,7 +11404,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 356
+            "line": 357
           },
           "name": "_SizeInWords",
           "type": "size_t",
@@ -11427,7 +11427,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 357
+            "line": 358
           },
           "name": "_Value",
           "type": "wchar_t",
@@ -11453,7 +11453,7 @@
       "location": {
         "column": 46,
         "file": "corecrt_wstring.h",
-        "line": 367
+        "line": 368
       },
       "name": "_wcsset",
       "params": [
@@ -11474,7 +11474,7 @@
           "location": {
             "column": 39,
             "file": "corecrt_wstring.h",
-            "line": 369
+            "line": 370
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11498,7 +11498,7 @@
           "location": {
             "column": 39,
             "file": "corecrt_wstring.h",
-            "line": 370
+            "line": 371
           },
           "name": "_Value",
           "type": "wchar_t",
@@ -11524,7 +11524,7 @@
       "location": {
         "column": 45,
         "file": "corecrt_wstring.h",
-        "line": 373
+        "line": 374
       },
       "name": "_wcslwr_s",
       "params": [
@@ -11545,7 +11545,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 374
+            "line": 375
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11569,7 +11569,7 @@
           "location": {
             "column": 46,
             "file": "corecrt_wstring.h",
-            "line": 375
+            "line": 376
           },
           "name": "_SizeInWords",
           "type": "size_t",
@@ -11595,7 +11595,7 @@
       "location": {
         "column": 46,
         "file": "corecrt_wstring.h",
-        "line": 384
+        "line": 385
       },
       "name": "_wcslwr",
       "params": [
@@ -11616,7 +11616,7 @@
           "location": {
             "column": 25,
             "file": "corecrt_wstring.h",
-            "line": 385
+            "line": 386
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11643,7 +11643,7 @@
       "location": {
         "column": 26,
         "file": "corecrt_wstring.h",
-        "line": 389
+        "line": 390
       },
       "name": "_wcslwr_s_l",
       "params": [
@@ -11664,7 +11664,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 390
+            "line": 391
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11688,7 +11688,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 391
+            "line": 392
           },
           "name": "_SizeInWords",
           "type": "size_t",
@@ -11711,7 +11711,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 392
+            "line": 393
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -11739,7 +11739,7 @@
       "location": {
         "column": 46,
         "file": "corecrt_wstring.h",
-        "line": 402
+        "line": 403
       },
       "name": "_wcslwr_l",
       "params": [
@@ -11760,7 +11760,7 @@
           "location": {
             "column": 41,
             "file": "corecrt_wstring.h",
-            "line": 404
+            "line": 405
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11784,7 +11784,7 @@
           "location": {
             "column": 41,
             "file": "corecrt_wstring.h",
-            "line": 405
+            "line": 406
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -11812,7 +11812,7 @@
       "location": {
         "column": 26,
         "file": "corecrt_wstring.h",
-        "line": 409
+        "line": 410
       },
       "name": "_wcsupr_s",
       "params": [
@@ -11833,7 +11833,7 @@
           "location": {
             "column": 39,
             "file": "corecrt_wstring.h",
-            "line": 410
+            "line": 411
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11857,7 +11857,7 @@
           "location": {
             "column": 39,
             "file": "corecrt_wstring.h",
-            "line": 411
+            "line": 412
           },
           "name": "_Size",
           "type": "size_t",
@@ -11883,7 +11883,7 @@
       "location": {
         "column": 46,
         "file": "corecrt_wstring.h",
-        "line": 420
+        "line": 421
       },
       "name": "_wcsupr",
       "params": [
@@ -11904,7 +11904,7 @@
           "location": {
             "column": 25,
             "file": "corecrt_wstring.h",
-            "line": 421
+            "line": 422
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11931,7 +11931,7 @@
       "location": {
         "column": 26,
         "file": "corecrt_wstring.h",
-        "line": 425
+        "line": 426
       },
       "name": "_wcsupr_s_l",
       "params": [
@@ -11952,7 +11952,7 @@
           "location": {
             "column": 40,
             "file": "corecrt_wstring.h",
-            "line": 426
+            "line": 427
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -11976,7 +11976,7 @@
           "location": {
             "column": 40,
             "file": "corecrt_wstring.h",
-            "line": 427
+            "line": 428
           },
           "name": "_Size",
           "type": "size_t",
@@ -11999,7 +11999,7 @@
           "location": {
             "column": 40,
             "file": "corecrt_wstring.h",
-            "line": 428
+            "line": 429
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -12027,7 +12027,7 @@
       "location": {
         "column": 46,
         "file": "corecrt_wstring.h",
-        "line": 438
+        "line": 439
       },
       "name": "_wcsupr_l",
       "params": [
@@ -12048,7 +12048,7 @@
           "location": {
             "column": 41,
             "file": "corecrt_wstring.h",
-            "line": 440
+            "line": 441
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -12072,7 +12072,7 @@
           "location": {
             "column": 41,
             "file": "corecrt_wstring.h",
-            "line": 441
+            "line": 442
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -12100,7 +12100,7 @@
       "location": {
         "column": 25,
         "file": "corecrt_wstring.h",
-        "line": 446
+        "line": 447
       },
       "name": "wcsxfrm",
       "params": [
@@ -12121,7 +12121,7 @@
           "location": {
             "column": 62,
             "file": "corecrt_wstring.h",
-            "line": 447
+            "line": 448
           },
           "name": "_Destination",
           "pointer_depth": 1,
@@ -12145,7 +12145,7 @@
           "location": {
             "column": 62,
             "file": "corecrt_wstring.h",
-            "line": 448
+            "line": 449
           },
           "name": "_Source",
           "pointer_depth": 1,
@@ -12169,7 +12169,7 @@
           "location": {
             "column": 62,
             "file": "corecrt_wstring.h",
-            "line": 449
+            "line": 450
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -12195,7 +12195,7 @@
       "location": {
         "column": 25,
         "file": "corecrt_wstring.h",
-        "line": 454
+        "line": 455
       },
       "name": "_wcsxfrm_l",
       "params": [
@@ -12216,7 +12216,7 @@
           "location": {
             "column": 62,
             "file": "corecrt_wstring.h",
-            "line": 455
+            "line": 456
           },
           "name": "_Destination",
           "pointer_depth": 1,
@@ -12240,7 +12240,7 @@
           "location": {
             "column": 62,
             "file": "corecrt_wstring.h",
-            "line": 456
+            "line": 457
           },
           "name": "_Source",
           "pointer_depth": 1,
@@ -12264,7 +12264,7 @@
           "location": {
             "column": 62,
             "file": "corecrt_wstring.h",
-            "line": 457
+            "line": 458
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -12287,7 +12287,7 @@
           "location": {
             "column": 62,
             "file": "corecrt_wstring.h",
-            "line": 458
+            "line": 459
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -12315,7 +12315,7 @@
       "location": {
         "column": 22,
         "file": "corecrt_wstring.h",
-        "line": 462
+        "line": 463
       },
       "name": "wcscoll",
       "params": [
@@ -12336,7 +12336,7 @@
           "location": {
             "column": 27,
             "file": "corecrt_wstring.h",
-            "line": 463
+            "line": 464
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -12360,7 +12360,7 @@
           "location": {
             "column": 27,
             "file": "corecrt_wstring.h",
-            "line": 464
+            "line": 465
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -12387,7 +12387,7 @@
       "location": {
         "column": 22,
         "file": "corecrt_wstring.h",
-        "line": 468
+        "line": 469
       },
       "name": "_wcscoll_l",
       "params": [
@@ -12408,7 +12408,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 469
+            "line": 470
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -12432,7 +12432,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 470
+            "line": 471
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -12456,7 +12456,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 471
+            "line": 472
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -12484,7 +12484,7 @@
       "location": {
         "column": 22,
         "file": "corecrt_wstring.h",
-        "line": 475
+        "line": 476
       },
       "name": "_wcsicoll",
       "params": [
@@ -12505,7 +12505,7 @@
           "location": {
             "column": 27,
             "file": "corecrt_wstring.h",
-            "line": 476
+            "line": 477
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -12529,7 +12529,7 @@
           "location": {
             "column": 27,
             "file": "corecrt_wstring.h",
-            "line": 477
+            "line": 478
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -12556,7 +12556,7 @@
       "location": {
         "column": 22,
         "file": "corecrt_wstring.h",
-        "line": 481
+        "line": 482
       },
       "name": "_wcsicoll_l",
       "params": [
@@ -12577,7 +12577,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 482
+            "line": 483
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -12601,7 +12601,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 483
+            "line": 484
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -12625,7 +12625,7 @@
           "location": {
             "column": 29,
             "file": "corecrt_wstring.h",
-            "line": 484
+            "line": 485
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -12653,7 +12653,7 @@
       "location": {
         "column": 22,
         "file": "corecrt_wstring.h",
-        "line": 488
+        "line": 489
       },
       "name": "_wcsncoll",
       "params": [
@@ -12674,7 +12674,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 489
+            "line": 490
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -12698,7 +12698,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 490
+            "line": 491
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -12722,7 +12722,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 491
+            "line": 492
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -12748,7 +12748,7 @@
       "location": {
         "column": 22,
         "file": "corecrt_wstring.h",
-        "line": 495
+        "line": 496
       },
       "name": "_wcsncoll_l",
       "params": [
@@ -12769,7 +12769,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 496
+            "line": 497
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -12793,7 +12793,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 497
+            "line": 498
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -12817,7 +12817,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 498
+            "line": 499
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -12840,7 +12840,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 499
+            "line": 500
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -12868,7 +12868,7 @@
       "location": {
         "column": 22,
         "file": "corecrt_wstring.h",
-        "line": 503
+        "line": 504
       },
       "name": "_wcsnicoll",
       "params": [
@@ -12889,7 +12889,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 504
+            "line": 505
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -12913,7 +12913,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 505
+            "line": 506
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -12937,7 +12937,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 506
+            "line": 507
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -12963,7 +12963,7 @@
       "location": {
         "column": 22,
         "file": "corecrt_wstring.h",
-        "line": 510
+        "line": 511
       },
       "name": "_wcsnicoll_l",
       "params": [
@@ -12984,7 +12984,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 511
+            "line": 512
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -13008,7 +13008,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 512
+            "line": 513
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -13032,7 +13032,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 513
+            "line": 514
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -13055,7 +13055,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 514
+            "line": 515
           },
           "name": "_Locale",
           "pointer_depth": 1,
@@ -13083,7 +13083,7 @@
       "location": {
         "column": 31,
         "file": "corecrt_wstring.h",
-        "line": 570
+        "line": 571
       },
       "name": "wcsdup",
       "params": [
@@ -13104,7 +13104,7 @@
           "location": {
             "column": 31,
             "file": "corecrt_wstring.h",
-            "line": 571
+            "line": 572
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -13131,7 +13131,7 @@
       "location": {
         "column": 26,
         "file": "corecrt_wstring.h",
-        "line": 582
+        "line": 583
       },
       "name": "wcsicmp",
       "params": [
@@ -13152,7 +13152,7 @@
           "location": {
             "column": 31,
             "file": "corecrt_wstring.h",
-            "line": 583
+            "line": 584
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -13176,7 +13176,7 @@
           "location": {
             "column": 31,
             "file": "corecrt_wstring.h",
-            "line": 584
+            "line": 585
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -13203,7 +13203,7 @@
       "location": {
         "column": 26,
         "file": "corecrt_wstring.h",
-        "line": 588
+        "line": 589
       },
       "name": "wcsnicmp",
       "params": [
@@ -13224,7 +13224,7 @@
           "location": {
             "column": 51,
             "file": "corecrt_wstring.h",
-            "line": 589
+            "line": 590
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -13248,7 +13248,7 @@
           "location": {
             "column": 51,
             "file": "corecrt_wstring.h",
-            "line": 590
+            "line": 591
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -13272,7 +13272,7 @@
           "location": {
             "column": 51,
             "file": "corecrt_wstring.h",
-            "line": 591
+            "line": 592
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -13298,7 +13298,7 @@
       "location": {
         "column": 31,
         "file": "corecrt_wstring.h",
-        "line": 596
+        "line": 597
       },
       "name": "wcsnset",
       "params": [
@@ -13319,7 +13319,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 597
+            "line": 598
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -13343,7 +13343,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 598
+            "line": 599
           },
           "name": "_Value",
           "type": "wchar_t",
@@ -13366,7 +13366,7 @@
           "location": {
             "column": 47,
             "file": "corecrt_wstring.h",
-            "line": 599
+            "line": 600
           },
           "name": "_MaxCount",
           "type": "size_t",
@@ -13392,7 +13392,7 @@
       "location": {
         "column": 31,
         "file": "corecrt_wstring.h",
-        "line": 604
+        "line": 605
       },
       "name": "wcsrev",
       "params": [
@@ -13413,7 +13413,7 @@
           "location": {
             "column": 28,
             "file": "corecrt_wstring.h",
-            "line": 605
+            "line": 606
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -13440,7 +13440,7 @@
       "location": {
         "column": 31,
         "file": "corecrt_wstring.h",
-        "line": 610
+        "line": 611
       },
       "name": "wcsset",
       "params": [
@@ -13461,7 +13461,7 @@
           "location": {
             "column": 28,
             "file": "corecrt_wstring.h",
-            "line": 611
+            "line": 612
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -13485,7 +13485,7 @@
           "location": {
             "column": 28,
             "file": "corecrt_wstring.h",
-            "line": 612
+            "line": 613
           },
           "name": "_Value",
           "type": "wchar_t",
@@ -13511,7 +13511,7 @@
       "location": {
         "column": 31,
         "file": "corecrt_wstring.h",
-        "line": 617
+        "line": 618
       },
       "name": "wcslwr",
       "params": [
@@ -13532,7 +13532,7 @@
           "location": {
             "column": 28,
             "file": "corecrt_wstring.h",
-            "line": 618
+            "line": 619
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -13559,7 +13559,7 @@
       "location": {
         "column": 31,
         "file": "corecrt_wstring.h",
-        "line": 623
+        "line": 624
       },
       "name": "wcsupr",
       "params": [
@@ -13580,7 +13580,7 @@
           "location": {
             "column": 28,
             "file": "corecrt_wstring.h",
-            "line": 624
+            "line": 625
           },
           "name": "_String",
           "pointer_depth": 1,
@@ -13607,7 +13607,7 @@
       "location": {
         "column": 26,
         "file": "corecrt_wstring.h",
-        "line": 628
+        "line": 629
       },
       "name": "wcsicoll",
       "params": [
@@ -13628,7 +13628,7 @@
           "location": {
             "column": 31,
             "file": "corecrt_wstring.h",
-            "line": 629
+            "line": 630
           },
           "name": "_String1",
           "pointer_depth": 1,
@@ -13652,7 +13652,7 @@
           "location": {
             "column": 31,
             "file": "corecrt_wstring.h",
-            "line": 630
+            "line": 631
           },
           "name": "_String2",
           "pointer_depth": 1,
@@ -16924,7 +16924,7 @@
       "has_body": true,
       "is_dllimport": false,
       "location": {
-        "column": 38,
+        "column": 55,
         "file": "string.h",
         "line": 367
       },
