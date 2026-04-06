@@ -10,6 +10,10 @@
 # Requires: Windows SDK installed. Auto-detects SDK path from registry.
 # Kernel mode additionally requires the WDK (install via winget:
 #   winget install --exact --id Microsoft.WindowsWDK.10.0.26100)
+#
+# Known limitations:
+#   - ARM/ARM64 funcs: bb-funcs --arch arm/arm64 fails (ARM ABI not implemented in bb).
+#     These are skipped automatically rather than counting as errors.
 
 param(
     [string]$Dataset = "",
@@ -38,7 +42,8 @@ if (-not $env:WindowsSdkDir) {
     $sdkRoot = "C:\Program Files (x86)\Windows Kits\10\"
     if (Test-Path $sdkRoot) {
         $env:WindowsSdkDir = $sdkRoot
-        $versions = Get-ChildItem (Join-Path $sdkRoot "Include") -Directory | Sort-Object Name
+        $versions = Get-ChildItem (Join-Path $sdkRoot "Include") -Directory |
+            Where-Object { $_.Name -match '^\d+\.' } | Sort-Object Name
         $latest = $versions[-1].Name
         $env:WindowsSDKLibVersion = "$latest\"
         Write-Host "auto-detected sdk: $latest"
@@ -81,9 +86,17 @@ foreach ($m in $Modes) {
                 $tool = $entry.Tool
                 $fname = $entry.File
                 $outfile = Join-Path $dir "$fname.json"
-                $total++
 
                 $modeLabel = if ($m.Suffix) { " [$($m.Name)]" } else { "" }
+
+                # Skip known-impossible combinations
+                # bb ARM ABI not implemented — funcs fail for arm/arm64
+                if ($tool -eq "bb-funcs" -and ($a -eq "arm" -or $a -eq "arm64")) {
+                    Write-Host "  $ds/$a/$fname$modeLabel ... SKIP (ARM ABI not implemented)"
+                    continue
+                }
+
+                $total++
                 Write-Host -NoNewline "  $ds/$a/$fname$modeLabel ... "
 
                 $exe = Join-Path $BbBinDir "$tool.exe"
