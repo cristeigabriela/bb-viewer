@@ -606,9 +606,9 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 }
 .param-values { display: flex; gap: 4px; flex-wrap: wrap; }
 
-/* ── Union member-overlay diagram ── */
-.union-overlay {
-  display: flex; flex-direction: column; gap: 6px;
+/* ── Union member-overlay (blended single-bar) ── */
+.union-overlay-blend {
+  display: flex; flex-direction: column; gap: 8px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   padding: 14px 16px 18px;
@@ -617,7 +617,7 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 .union-overlay-scale {
   position: relative;
   height: 18px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   border-bottom: 1px dashed var(--border-light);
 }
 .union-overlay-scale .scale-marker {
@@ -627,32 +627,47 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
   color: var(--text-dim);
   transform: translateX(-50%);
 }
-.union-overlay-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 14px;
-  align-items: center;
-}
-.union-overlay-track {
+/* The shared bar — opaque dark background; layers stack at left:0 and blend. */
+.union-overlay-blend-track {
   position: relative;
-  height: 22px;
-  background: rgba(255, 255, 255, 0.02);
+  height: 44px;
+  background: #161b22;
   border: 1px solid var(--border-light);
+  /* isolation gives mix-blend-mode a fresh stacking context so layers
+     blend only against each other (and the local dark bg), not the page. */
+  isolation: isolate;
 }
-.union-overlay-bar {
+.union-overlay-blend-layer {
   position: absolute; left: 0; top: 0; bottom: 0;
-  border-right: 1px solid rgba(0, 0, 0, 0.4);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+  transition: opacity 0.12s ease;
 }
-.union-overlay-bar.union-overlay-anon { background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.18) 4px, rgba(0,0,0,0.18) 8px); }
-.union-overlay-unused {
-  position: absolute; top: 0; bottom: 0;
-  background: repeating-linear-gradient(45deg, #30363d, #30363d 2px, transparent 2px, transparent 4px);
-  opacity: 0.45;
+.union-overlay-blend-layer:hover {
+  opacity: 0.9;
+  z-index: 1;
 }
-.union-overlay-label {
+.union-overlay-blend-layer.union-overlay-anon {
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.25) 4px, rgba(0,0,0,0.25) 8px);
+}
+
+/* Legend — flow chips beneath the bar. */
+.union-overlay-blend-legend {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  margin-top: 4px;
   font-size: 0.78rem;
-  white-space: nowrap;
 }
+.union-overlay-legend-item {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.union-overlay-legend-swatch {
+  display: inline-block; width: 14px; height: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  opacity: 0.7;
+}
+.union-overlay-legend-name { letter-spacing: 0; }
+.union-overlay-legend-meta { font-size: 0.72rem; }
 
 /* ── Status bar (VS Code-style footer) ── */
 .status-bar {

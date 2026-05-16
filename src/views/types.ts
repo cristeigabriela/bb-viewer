@@ -301,7 +301,7 @@ function maxAlign(td: TypeDef): number {
 function renderUnionOverlay(td: TypeDef): HTMLElement {
   const content = el("div", {});
   // Use the same dedup pass as field-table / C codegen so the overlay doesn't
-  // show synthetic <anonymous_N> sibling rows alongside their named twin.
+  // show synthetic <anonymous_N> rows alongside their named twin.
   const members = dedupAnonSiblings(td);
   const totalBytes = td.size ?? Math.max(...members.map(f => f.size), 0);
   if (!totalBytes || members.length === 0) {
@@ -309,45 +309,52 @@ function renderUnionOverlay(td: TypeDef): HTMLElement {
     return content;
   }
 
-  const wrap = el("div", { className: "union-overlay" });
+  const wrap = el("div", { className: "union-overlay-blend" });
+
+  // Top scale (byte offsets across the union width).
   const scale = el("div", { className: "union-overlay-scale" });
   const markerCount = Math.min(8, totalBytes);
-  const step = Math.ceil(totalBytes / markerCount);
-  for (let i = 0; i <= markerCount; i++) {
-    const offset = Math.min(i * step, totalBytes);
-    scale.appendChild(el("span", { className: "scale-marker", style: `left:${(offset / totalBytes) * 100}%` },
-      `0x${offset.toString(16).toUpperCase()}`));
+  const step = Math.max(1, Math.ceil(totalBytes / markerCount));
+  for (let off = 0; off <= totalBytes; off += step) {
+    const o = Math.min(off, totalBytes);
+    scale.appendChild(el("span", {
+      className: "scale-marker",
+      style: `left:${(o / totalBytes) * 100}%`,
+    }, `0x${o.toString(16).toUpperCase()}`));
   }
   wrap.appendChild(scale);
 
+  // Single track with one translucent layer per member, all anchored at offset 0.
+  // mix-blend-mode: screen makes overlapping regions visually accumulate, so
+  // the byte range covered by the most members ends up the brightest.
+  const track = el("div", { className: "union-overlay-blend-track" });
   members.forEach((f, i) => {
     const color = FIELD_COLORS[i % FIELD_COLORS.length];
-    const row = el("div", { className: "union-overlay-row" });
-    const track = el("div", { className: "union-overlay-track" });
     const isAnon = f.is_anonymous || f.name.startsWith("<anonymous_");
-    const bar = el("div", {
-      className: `union-overlay-bar${isAnon ? " union-overlay-anon" : ""}`,
-      style: `width:${(f.size / totalBytes) * 100}%;background:${color}`,
+    const layer = el("div", {
+      className: `union-overlay-blend-layer${isAnon ? " union-overlay-anon" : ""}`,
+      style: `width:${(f.size / totalBytes) * 100}%;background:${color};`,
     });
-    bar.title = `${isAnon ? "anon " + (f.anon_ref?.kind ?? "") : f.name}: ${f.size}B at 0x0`;
-    track.appendChild(bar);
-    if (f.size < totalBytes) {
-      const pad = el("div", {
-        className: "union-overlay-unused",
-        style: `left:${(f.size / totalBytes) * 100}%;width:${((totalBytes - f.size) / totalBytes) * 100}%`,
-      });
-      pad.title = `${totalBytes - f.size}B unused by this member`;
-      track.appendChild(pad);
-    }
-    row.appendChild(track);
-    const label = el("div", { className: "union-overlay-label mono" });
-    label.appendChild(el("span", { className: "union-overlay-name bold", style: `color:${color}` },
-      isAnon ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name));
-    label.appendChild(el("span", { className: "union-overlay-meta dim" }, ` ${f.size}B / ${totalBytes}B`));
-    if (f.type) label.appendChild(el("span", { className: "union-overlay-type dim" }, ` ${f.type}`));
-    row.appendChild(label);
-    wrap.appendChild(row);
+    layer.title = `${isAnon ? "(anon " + (f.anon_ref?.kind ?? "") + ")" : f.name}: bytes 0x0–0x${(f.size - 1).toString(16).toUpperCase()}`;
+    track.appendChild(layer);
   });
+  wrap.appendChild(track);
+
+  // Legend.
+  const legend = el("div", { className: "union-overlay-blend-legend" });
+  members.forEach((f, i) => {
+    const color = FIELD_COLORS[i % FIELD_COLORS.length];
+    const isAnon = f.is_anonymous || f.name.startsWith("<anonymous_");
+    const item = el("div", { className: "union-overlay-legend-item" });
+    item.appendChild(el("span", { className: "union-overlay-legend-swatch", style: `background:${color}` }));
+    const name = isAnon ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name;
+    item.appendChild(el("span", { className: "union-overlay-legend-name mono bold", style: `color:${color}` }, name));
+    const meta = `${f.size}B${f.type ? ` · ${f.type}` : ""}`;
+    item.appendChild(el("span", { className: "union-overlay-legend-meta dim" }, meta));
+    legend.appendChild(item);
+  });
+  wrap.appendChild(legend);
+
   content.appendChild(wrap);
 
   const stats = el("div", { className: "type-stats" });
