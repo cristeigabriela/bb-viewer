@@ -1058,7 +1058,8 @@ main#content { padding-bottom: 28px; }
 
 /* ── Clippy ── */
 #clippy-box {
-  position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+  /* bottom offset clears the 22px status bar + breathing room */
+  position: fixed; bottom: 42px; right: 20px; z-index: 10000;
   width: 36px; height: 36px;
   border-radius: 50%;
   background: var(--bg-card);
