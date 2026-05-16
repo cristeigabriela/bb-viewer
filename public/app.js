@@ -3029,66 +3029,7 @@ function maxAlign(td) {
   }
   return m;
 }
-function renderUnionOverlay(td) {
-  const content = el("div", {});
-  const members = dedupAnonSiblings(td);
-  const totalBytes = td.size ?? Math.max(...members.map((f) => f.size), 0);
-  if (!totalBytes || members.length === 0) {
-    content.appendChild(el("p", { className: "dim" }, "No member overlay information available."));
-    return content;
-  }
-  const wrap = el("div", { className: "union-overlay-blend" });
-  const scale = el("div", { className: "union-overlay-scale" });
-  const markerCount = Math.min(8, totalBytes);
-  const step = Math.max(1, Math.ceil(totalBytes / markerCount));
-  for (let off = 0;off <= totalBytes; off += step) {
-    const o = Math.min(off, totalBytes);
-    scale.appendChild(el("span", {
-      className: "scale-marker",
-      style: `left:${o / totalBytes * 100}%`
-    }, `0x${o.toString(16).toUpperCase()}`));
-  }
-  wrap.appendChild(scale);
-  const track = el("div", { className: "union-overlay-blend-track" });
-  members.forEach((f, i) => {
-    const color = FIELD_COLORS[i % FIELD_COLORS.length];
-    const isAnon = f.is_anonymous || f.name.startsWith("<anonymous_");
-    const layer = el("div", {
-      className: `union-overlay-blend-layer${isAnon ? " union-overlay-anon" : ""}`,
-      style: `width:${f.size / totalBytes * 100}%;background:${color};`
-    });
-    layer.title = `${isAnon ? "(anon " + (f.anon_ref?.kind ?? "") + ")" : f.name}: bytes 0x0–0x${(f.size - 1).toString(16).toUpperCase()}`;
-    track.appendChild(layer);
-  });
-  wrap.appendChild(track);
-  const legend = el("div", { className: "union-overlay-blend-legend" });
-  members.forEach((f, i) => {
-    const color = FIELD_COLORS[i % FIELD_COLORS.length];
-    const isAnon = f.is_anonymous || f.name.startsWith("<anonymous_");
-    const item = el("div", { className: "union-overlay-legend-item" });
-    item.appendChild(el("span", { className: "union-overlay-legend-swatch", style: `background:${color}` }));
-    const name = isAnon ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name;
-    item.appendChild(el("span", { className: "union-overlay-legend-name mono bold", style: `color:${color}` }, name));
-    const meta = `${f.size}B${f.type ? ` · ${f.type}` : ""}`;
-    item.appendChild(el("span", { className: "union-overlay-legend-meta dim" }, meta));
-    legend.appendChild(item);
-  });
-  wrap.appendChild(legend);
-  content.appendChild(wrap);
-  const stats = el("div", { className: "type-stats" });
-  const maxMember = Math.max(...members.map((f) => f.size), 0);
-  stats.appendChild(el("span", {}, "Kind: union"));
-  stats.appendChild(el("span", {}, `Size: ${totalBytes}B (max of ${members.length} members)`));
-  stats.appendChild(el("span", {}, `Largest member: ${maxMember}B`));
-  if (members.length > 0) {
-    stats.appendChild(el("span", {}, `Max align: ${Math.max(...members.map((f) => f.alignment), 1)}`));
-  }
-  content.appendChild(stats);
-  return content;
-}
 function renderMemoryLayout(td) {
-  if (recordKind(td) === "union")
-    return renderUnionOverlay(td);
   const content = el("div", {});
   if (!td.size || td.fields.length === 0) {
     content.appendChild(el("p", { className: "dim" }, "No layout information available."));
@@ -3469,7 +3410,9 @@ function renderRecordDetail(container, td) {
     pg.appendChild(collapsibleSection("C Definition", withGutter(proto)));
     requestAnimationFrame(() => highlightCode(proto));
   }
-  pg.appendChild(collapsibleSection(kind === "union" ? "Member Overlay" : "Memory Layout", renderMemoryLayout(td)));
+  if (kind !== "union") {
+    pg.appendChild(collapsibleSection("Memory Layout", renderMemoryLayout(td)));
+  }
   if (td.fields.length > 0) {
     pg.appendChild(collapsibleSection("Fields", renderFieldTable(td.fields, {
       parentName: td.name,

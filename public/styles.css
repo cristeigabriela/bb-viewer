@@ -606,69 +606,6 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 }
 .param-values { display: flex; gap: 4px; flex-wrap: wrap; }
 
-/* ── Union member-overlay (blended single-bar) ── */
-.union-overlay-blend {
-  display: flex; flex-direction: column; gap: 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  padding: 14px 16px 18px;
-  margin-top: 4px;
-}
-.union-overlay-scale {
-  position: relative;
-  height: 18px;
-  margin-bottom: 2px;
-  border-bottom: 1px dashed var(--border-light);
-}
-.union-overlay-scale .scale-marker {
-  position: absolute;
-  font-family: "Courier New", monospace;
-  font-size: 0.66rem;
-  color: var(--text-dim);
-  transform: translateX(-50%);
-}
-/* The shared bar — opaque dark background; layers stack at left:0 and blend. */
-.union-overlay-blend-track {
-  position: relative;
-  height: 44px;
-  background: #161b22;
-  border: 1px solid var(--border-light);
-  /* isolation gives mix-blend-mode a fresh stacking context so layers
-     blend only against each other (and the local dark bg), not the page. */
-  isolation: isolate;
-}
-.union-overlay-blend-layer {
-  position: absolute; left: 0; top: 0; bottom: 0;
-  opacity: 0.55;
-  mix-blend-mode: screen;
-  border-right: 1px solid rgba(255, 255, 255, 0.15);
-  transition: opacity 0.12s ease;
-}
-.union-overlay-blend-layer:hover {
-  opacity: 0.9;
-  z-index: 1;
-}
-.union-overlay-blend-layer.union-overlay-anon {
-  background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.25) 4px, rgba(0,0,0,0.25) 8px);
-}
-
-/* Legend — flow chips beneath the bar. */
-.union-overlay-blend-legend {
-  display: flex; flex-wrap: wrap; gap: 4px 14px;
-  margin-top: 4px;
-  font-size: 0.78rem;
-}
-.union-overlay-legend-item {
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.union-overlay-legend-swatch {
-  display: inline-block; width: 14px; height: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  opacity: 0.7;
-}
-.union-overlay-legend-name { letter-spacing: 0; }
-.union-overlay-legend-meta { font-size: 0.72rem; }
-
 /* ── Status bar (VS Code-style footer) ── */
 .status-bar {
   position: fixed; left: 0; right: 0; bottom: 0;

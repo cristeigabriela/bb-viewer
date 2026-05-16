@@ -294,83 +294,7 @@ function maxAlign(td: TypeDef): number {
 
 /* ── Memory layout viz ──────────────────────────────────────────────── */
 
-/** Unions don't have a "layout" the way structs do — every member starts at
- *  offset 0 and the record's size is the max of the member sizes. Render them
- *  as a member-overlay diagram: one horizontal row per member, each showing
- *  the bytes it actually occupies, against a faded full-width union bar. */
-function renderUnionOverlay(td: TypeDef): HTMLElement {
-  const content = el("div", {});
-  // Use the same dedup pass as field-table / C codegen so the overlay doesn't
-  // show synthetic <anonymous_N> rows alongside their named twin.
-  const members = dedupAnonSiblings(td);
-  const totalBytes = td.size ?? Math.max(...members.map(f => f.size), 0);
-  if (!totalBytes || members.length === 0) {
-    content.appendChild(el("p", { className: "dim" }, "No member overlay information available."));
-    return content;
-  }
-
-  const wrap = el("div", { className: "union-overlay-blend" });
-
-  // Top scale (byte offsets across the union width).
-  const scale = el("div", { className: "union-overlay-scale" });
-  const markerCount = Math.min(8, totalBytes);
-  const step = Math.max(1, Math.ceil(totalBytes / markerCount));
-  for (let off = 0; off <= totalBytes; off += step) {
-    const o = Math.min(off, totalBytes);
-    scale.appendChild(el("span", {
-      className: "scale-marker",
-      style: `left:${(o / totalBytes) * 100}%`,
-    }, `0x${o.toString(16).toUpperCase()}`));
-  }
-  wrap.appendChild(scale);
-
-  // Single track with one translucent layer per member, all anchored at offset 0.
-  // mix-blend-mode: screen makes overlapping regions visually accumulate, so
-  // the byte range covered by the most members ends up the brightest.
-  const track = el("div", { className: "union-overlay-blend-track" });
-  members.forEach((f, i) => {
-    const color = FIELD_COLORS[i % FIELD_COLORS.length];
-    const isAnon = f.is_anonymous || f.name.startsWith("<anonymous_");
-    const layer = el("div", {
-      className: `union-overlay-blend-layer${isAnon ? " union-overlay-anon" : ""}`,
-      style: `width:${(f.size / totalBytes) * 100}%;background:${color};`,
-    });
-    layer.title = `${isAnon ? "(anon " + (f.anon_ref?.kind ?? "") + ")" : f.name}: bytes 0x0–0x${(f.size - 1).toString(16).toUpperCase()}`;
-    track.appendChild(layer);
-  });
-  wrap.appendChild(track);
-
-  // Legend.
-  const legend = el("div", { className: "union-overlay-blend-legend" });
-  members.forEach((f, i) => {
-    const color = FIELD_COLORS[i % FIELD_COLORS.length];
-    const isAnon = f.is_anonymous || f.name.startsWith("<anonymous_");
-    const item = el("div", { className: "union-overlay-legend-item" });
-    item.appendChild(el("span", { className: "union-overlay-legend-swatch", style: `background:${color}` }));
-    const name = isAnon ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name;
-    item.appendChild(el("span", { className: "union-overlay-legend-name mono bold", style: `color:${color}` }, name));
-    const meta = `${f.size}B${f.type ? ` · ${f.type}` : ""}`;
-    item.appendChild(el("span", { className: "union-overlay-legend-meta dim" }, meta));
-    legend.appendChild(item);
-  });
-  wrap.appendChild(legend);
-
-  content.appendChild(wrap);
-
-  const stats = el("div", { className: "type-stats" });
-  const maxMember = Math.max(...members.map(f => f.size), 0);
-  stats.appendChild(el("span", {}, "Kind: union"));
-  stats.appendChild(el("span", {}, `Size: ${totalBytes}B (max of ${members.length} members)`));
-  stats.appendChild(el("span", {}, `Largest member: ${maxMember}B`));
-  if (members.length > 0) {
-    stats.appendChild(el("span", {}, `Max align: ${Math.max(...members.map(f => f.alignment), 1)}`));
-  }
-  content.appendChild(stats);
-  return content;
-}
-
 function renderMemoryLayout(td: TypeDef): HTMLElement {
-  if (recordKind(td) === "union") return renderUnionOverlay(td);
   const content = el("div", {});
   if (!td.size || td.fields.length === 0) {
     content.appendChild(el("p", { className: "dim" }, "No layout information available."));
@@ -716,9 +640,12 @@ function renderRecordDetail(container: Element, td: TypeDef): void {
     requestAnimationFrame(() => highlightCode(proto));
   }
 
-  pg.appendChild(collapsibleSection(
-    kind === "union" ? "Member Overlay" : "Memory Layout",
-    renderMemoryLayout(td)));
+  // Unions don't have a "layout" — every member starts at 0 and there's no
+  // single sequential picture to draw. Skip the section entirely for unions
+  // (the field table + per-member sizes already convey the relevant info).
+  if (kind !== "union") {
+    pg.appendChild(collapsibleSection("Memory Layout", renderMemoryLayout(td)));
+  }
 
   if (td.fields.length > 0) {
     pg.appendChild(collapsibleSection("Fields", renderFieldTable(td.fields, {
