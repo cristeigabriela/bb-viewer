@@ -1,4 +1,4 @@
-import { getCurrentDataset, getCurrentArch } from "../data";
+import { getCurrentDataset, getCurrentArch, getCurrentMode } from "../data";
 import { buildHash } from "../router";
 import { el, clear } from "../dom";
 import { debounce } from "../utils";
@@ -26,10 +26,12 @@ let cachedKey = "";
 async function loadGraphData(): Promise<GraphData> {
   const ds = getCurrentDataset();
   const arch = getCurrentArch();
-  const key = `${ds}/${arch}`;
+  const mode = getCurrentMode();
+  const suffix = mode === "kernel" ? "-kernel" : "";
+  const key = `${ds}${suffix}/${arch}`;
   if (cachedGraph && cachedKey === key) return cachedGraph;
 
-  const resp = await fetch(`data/${ds}/${arch}/graph.json`);
+  const resp = await fetch(`data/${ds}${suffix}/${arch}/graph.json`);
   if (!resp.ok) throw new Error("graph.json not found");
   cachedGraph = await resp.json();
   cachedKey = key;

@@ -1,22 +1,23 @@
-/** Type tokens that are primitives/builtins and should not be treated as user-defined types */
+/** True C keywords and primitives that should never be treated as user-defined types.
+ *
+ *  This set deliberately excludes Win32 typedefs (DWORD, HANDLE, LPCWSTR, etc.).
+ *  Those are first-class entries in `TypesData.typedefs` after bb PR #25 and
+ *  resolve naturally through the typedef index. */
 export const KNOWN_PRIMITIVES = new Set([
-  "void", "int", "char", "short", "long", "float", "double", "unsigned",
-  "signed", "const", "struct", "union", "enum", "volatile", "static",
-  "extern", "inline", "restrict", "register", "typedef", "return",
-  "__attribute__", "__stdcall", "__cdecl", "__fastcall", "VOID",
-  "__int64", "__int32", "__int16", "__int8", "wchar_t", "size_t",
-  "UCHAR", "USHORT", "ULONG", "ULONGLONG", "CHAR", "SHORT", "LONG",
-  "LONGLONG", "BOOLEAN", "BOOL", "BYTE", "WORD", "DWORD", "DWORDLONG",
-  "QWORD", "INT", "UINT", "FLOAT", "DOUBLE", "WCHAR", "PVOID", "LPVOID",
-  "LPCVOID", "HANDLE", "HRESULT", "NTSTATUS", "HMODULE", "HINSTANCE",
-  "HWND", "HDC", "HBITMAP", "HBRUSH", "HFONT", "HICON", "HMENU", "HPEN",
-  "HRGN", "HPALETTE", "HKEY", "HMONITOR", "HGLOBAL", "HLOCAL",
-  "SIZE_T", "SSIZE_T", "ULONG_PTR", "LONG_PTR", "DWORD_PTR", "UINT_PTR",
-  "INT_PTR", "WPARAM", "LPARAM", "LRESULT", "ATOM", "COLORREF",
-  "LCID", "LANGID", "LPSTR", "LPCSTR", "LPWSTR", "LPCWSTR",
-  "BSTR", "VARIANT_BOOL", "SCODE", "DISPID", "MEMBERID",
-  "LARGE_INTEGER", "ULARGE_INTEGER", "LUID",
-  "PUCHAR", "PUSHORT", "PULONG", "PCHAR", "PSHORT", "PLONG",
-  "PBOOL", "PBYTE", "PWORD", "PDWORD", "PFLOAT", "PDOUBLE",
-  "LPBOOL", "LPBYTE", "LPWORD", "LPDWORD",
+  // C language keywords
+  "auto", "const", "extern", "inline", "register", "restrict", "return",
+  "signed", "static", "typedef", "unsigned", "volatile",
+  // C struct/union/enum keywords (appear in field type strings)
+  "struct", "union", "enum",
+  // C primitive types
+  "void", "char", "short", "int", "long", "float", "double",
+  "_Bool", "_Complex", "_Imaginary",
+  // C extension types
+  "__int8", "__int16", "__int32", "__int64", "wchar_t", "size_t",
+  // MSVC calling-convention keywords
+  "__cdecl", "__stdcall", "__fastcall", "__thiscall", "__vectorcall",
+  // MSVC attributes
+  "__attribute__", "__declspec", "__forceinline",
+  // Other common C noise tokens
+  "NULL", "TRUE", "FALSE",
 ]);

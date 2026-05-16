@@ -1,4 +1,4 @@
-import { searchAll, findFunc, findType, findConst, findEnum } from "./data";
+import { searchAll, findFunc, findType, findTypedef, findConst, findEnum } from "./data";
 import { el, clear } from "./dom";
 import { badge, renderTypeStr } from "./ui/links";
 import { debounce } from "./utils";
@@ -15,7 +15,8 @@ let previewTimer: ReturnType<typeof setTimeout> | null = null;
 function getHref(item: { kind: string; name: string }): string {
   switch (item.kind) {
     case "function": return buildHash(`/functions/${encodeURIComponent(item.name)}`);
-    case "type": return buildHash(`/types/${encodeURIComponent(item.name)}`);
+    case "type":
+    case "typedef": return buildHash(`/types/${encodeURIComponent(item.name)}`);
     case "constant": return buildHash(`/constants/${encodeURIComponent(item.name)}`);
     case "enum": return buildHash(`/constants/enum/${encodeURIComponent(item.name)}`);
     default: return buildHash("/");
@@ -26,6 +27,7 @@ function getBadge(kind: string): HTMLElement {
   switch (kind) {
     case "function": return badge("fn", "search-badge-fn");
     case "type": return badge("type", "search-badge-type");
+    case "typedef": return badge("typedef", "search-badge-typedef");
     case "constant": return badge("const", "search-badge-const");
     case "enum": return badge("enum", "search-badge-enum");
     case "page": return badge("go", "search-badge-page");
@@ -69,9 +71,11 @@ function renderPreview(item: { kind: string; name: string }): void {
     const td = findType(item.name);
     if (td) {
       const info = el("div", { className: "sp-info" });
+      info.appendChild(el("div", {}, `kind: ${td.kind ?? "struct"}`));
       info.appendChild(el("div", {}, `size: ${td.size !== null ? td.size + "B" : "opaque"}`));
       info.appendChild(el("div", {}, `fields: ${td.fields.length}`));
       info.appendChild(el("div", {}, `header: ${td.location.file ?? "?"}`));
+      if (td.aliases?.length) info.appendChild(el("div", {}, `aka: ${td.aliases.slice(0, 3).join(", ")}`));
       previewPane.appendChild(info);
 
       if (td.fields.length > 0) {
@@ -79,8 +83,8 @@ function renderPreview(item: { kind: string; name: string }): void {
         for (const f of td.fields.slice(0, 12)) {
           const row = el("div", { className: "sp-field-row" });
           row.appendChild(el("span", { className: "sp-field-off" }, `0x${f.offset.toString(16).toUpperCase()}`));
-          row.appendChild(el("span", { className: "sp-field-name" }, f.name));
-          row.appendChild(el("span", { className: "sp-field-type" }, f.type ?? "?"));
+          row.appendChild(el("span", { className: "sp-field-name" }, f.is_anonymous ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name));
+          row.appendChild(el("span", { className: "sp-field-type" }, f.type ?? "—"));
           fields.appendChild(row);
         }
         if (td.fields.length > 12) {
@@ -88,6 +92,18 @@ function renderPreview(item: { kind: string; name: string }): void {
         }
         previewPane.appendChild(fields);
       }
+    }
+  } else if (item.kind === "typedef") {
+    const t = findTypedef(item.name);
+    if (t) {
+      const info = el("div", { className: "sp-info" });
+      info.appendChild(el("div", {}, `kind: ${t.kind}`));
+      info.appendChild(el("div", {}, `canonical: ${t.canonical}`));
+      if (t.underlying_record) info.appendChild(el("div", {}, `record: ${t.underlying_record}`));
+      else if (t.underlying_type) info.appendChild(el("div", {}, `primitive: ${t.underlying_type}`));
+      info.appendChild(el("div", {}, `header: ${t.location.file ?? "?"}`));
+      if (t.chain.length > 1) info.appendChild(el("div", {}, `chain: ${t.name} → ${t.chain.join(" → ")}`));
+      previewPane.appendChild(info);
     }
   } else if (item.kind === "constant") {
     const c = findConst(item.name);

@@ -36,9 +36,10 @@ async function init() {
   const initialParams = parseInitialQuery();
   const initialDs = initialParams.ds as "winsdk" | "phnt" | undefined;
   const initialArch = initialParams.arch;
+  const initialMode = initialParams.mode as "user" | "kernel" | undefined;
 
   try {
-    await loadData(initialDs || undefined, initialArch || undefined);
+    await loadData(initialDs || undefined, initialArch || undefined, initialMode || undefined);
   } catch (e) {
     $("#loading")!.innerHTML = `<div class="error">Failed to load data: ${e}</div>`;
     return;

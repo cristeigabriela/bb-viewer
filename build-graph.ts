@@ -10,11 +10,28 @@ import { KNOWN_PRIMITIVES } from "./src/primitives";
 
 const DATA_DIR = join(import.meta.dir, "data");
 
+interface FieldEntry {
+  name: string;
+  type: string | null;
+  size: number;
+  offset: number;
+  is_anonymous?: boolean;
+  underlying_record?: string;
+}
+
 interface TypeEntry {
   name: string;
   size: number | null;
-  fields: Array<{ name: string; type: string; size: number; offset: number }>;
+  fields: FieldEntry[];
   location: { file: string | null };
+  kind?: "struct" | "union";
+  is_anonymous?: boolean;
+  aliases?: string[];
+}
+
+interface TypedefEntry {
+  name: string;
+  canonical_decl_name?: string;
 }
 
 function extractTypeTokens(typeStr: string): string[] {
@@ -23,28 +40,43 @@ function extractTypeTokens(typeStr: string): string[] {
     .replace(/\([^)]*\)/g, " ")
     .replace(/[*&\[\]{}(),;]/g, " ");
   const tokens = cleaned.split(/\s+/).filter(Boolean);
-  return tokens.filter(t => !KNOWN_PRIMITIVES.has(t) && /^[A-Z_][A-Za-z0-9_]*$/.test(t) && t.length > 2);
+  return tokens.filter(t => !KNOWN_PRIMITIVES.has(t) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(t) && t.length > 2);
 }
 
 function buildGraph(typesPath: string): { nodes: any[]; edges: any[]; } | null {
   if (!existsSync(typesPath)) return null;
   const raw = JSON.parse(readFileSync(typesPath, "utf-8"));
-  const allTypes: TypeEntry[] = [...(raw.types ?? []), ...(raw.referenced_types ?? [])];
 
-  const typeSet = new Set(allTypes.map(t => t.name));
-
-  // Build alias map (same as data.ts)
-  const aliases = new Map<string, string>();
-  for (const name of typeSet) {
-    if (name.startsWith("_") && !name.startsWith("__")) {
-      const stripped = name.slice(1);
-      if (!typeSet.has(stripped)) aliases.set(stripped, name);
-      if (!typeSet.has("LP" + stripped)) aliases.set("LP" + stripped, name);
-      if (!typeSet.has("P" + stripped)) aliases.set("P" + stripped, name);
+  // Only named records become graph nodes; anonymous records exist solely as
+  // memory-layout sub-decls of their parent and are not standalone identities.
+  const namedRecords: TypeEntry[] = [];
+  for (const t of (raw.types ?? []) as TypeEntry[]) {
+    if (!t.is_anonymous && !t.name.startsWith("<anonymous_")) namedRecords.push(t);
+  }
+  // referenced_types is mostly anonymous post bb PR #25; include only any named
+  // fallbacks (e.g. forward-decl shells that didn't make it to types[]).
+  for (const t of (raw.referenced_types ?? []) as TypeEntry[]) {
+    if (!t.is_anonymous && !t.name.startsWith("<anonymous_") &&
+        !namedRecords.find(n => n.name === t.name)) {
+      namedRecords.push(t);
     }
-    if (name.startsWith("tag") && name.length > 3 && name[3] >= "A" && name[3] <= "Z") {
-      const stripped = name.slice(3);
-      if (!typeSet.has(stripped)) aliases.set(stripped, name);
+  }
+
+  const typeSet = new Set(namedRecords.map(t => t.name));
+
+  // Build alias map from first-class typedefs (no more _prefix / LP / P hacks).
+  // Also include the per-record `aliases` array as a backup for older data.
+  const aliases = new Map<string, string>();
+  for (const td of (raw.typedefs ?? []) as TypedefEntry[]) {
+    if (td.canonical_decl_name && typeSet.has(td.canonical_decl_name) && !typeSet.has(td.name)) {
+      aliases.set(td.name, td.canonical_decl_name);
+    }
+  }
+  for (const t of namedRecords) {
+    if (t.aliases) {
+      for (const a of t.aliases) {
+        if (!typeSet.has(a) && !aliases.has(a)) aliases.set(a, t.name);
+      }
     }
   }
 
@@ -53,14 +85,27 @@ function buildGraph(typesPath: string): { nodes: any[]; edges: any[]; } | null {
     return aliases.get(token) ?? null;
   };
 
-  // Build edges: type A contains field of type B
   const edgeSet = new Set<string>();
   const edges: Array<{ source: string; target: string }> = [];
   const connectedTypes = new Set<string>();
 
-  for (const td of allTypes) {
+  for (const td of namedRecords) {
     if (td.fields.length === 0) continue;
     for (const f of td.fields) {
+      // Synthetic anonymous-record sub-decls — skip, they have no outward identity.
+      if (f.is_anonymous) continue;
+      // Prefer the canonical record name when bb gave us one.
+      const direct = f.underlying_record;
+      if (direct && typeSet.has(direct) && direct !== td.name) {
+        const key = `${td.name}->${direct}`;
+        if (!edgeSet.has(key)) {
+          edgeSet.add(key);
+          edges.push({ source: td.name, target: direct });
+          connectedTypes.add(td.name);
+          connectedTypes.add(direct);
+        }
+        continue;
+      }
       if (!f.type) continue;
       for (const token of extractTypeTokens(f.type)) {
         const resolved = resolve(token);
@@ -77,9 +122,8 @@ function buildGraph(typesPath: string): { nodes: any[]; edges: any[]; } | null {
     }
   }
 
-  // Only include types that have at least one connection
-  const typeMap = new Map(allTypes.map(t => [t.name, t]));
-  const nodes: Array<{ id: string; size: number | null; fields: number; header: string | null; degree: number }> = [];
+  const typeMap = new Map(namedRecords.map(t => [t.name, t]));
+  const nodes: Array<{ id: string; size: number | null; fields: number; header: string | null; degree: number; kind?: string }> = [];
   const degreeMap = new Map<string, number>();
   for (const e of edges) {
     degreeMap.set(e.source, (degreeMap.get(e.source) ?? 0) + 1);
@@ -94,6 +138,7 @@ function buildGraph(typesPath: string): { nodes: any[]; edges: any[]; } | null {
       fields: td?.fields.length ?? 0,
       header: td?.location.file ?? null,
       degree: degreeMap.get(name) ?? 0,
+      kind: td?.kind ?? "struct",
     });
   }
 
@@ -103,7 +148,6 @@ function buildGraph(typesPath: string): { nodes: any[]; edges: any[]; } | null {
 function computePositions(graph: { nodes: any[]; edges: any[] }): void {
   console.log(`  running force simulation on ${graph.nodes.length} nodes, ${graph.edges.length} edges...`);
 
-  // Create simulation nodes/links
   const simNodes = graph.nodes.map(n => ({
     id: n.id,
     x: Math.random() * 2000 - 1000,
@@ -125,18 +169,15 @@ function computePositions(graph: { nodes: any[]; edges: any[] }): void {
     .force("collide", forceCollide(8))
     .stop();
 
-  // Run ticks
   const ticks = Math.min(300, 100 + graph.nodes.length / 10);
   for (let i = 0; i < ticks; i++) sim.tick();
 
-  // Write positions back to nodes
   for (let i = 0; i < graph.nodes.length; i++) {
     graph.nodes[i].x = Math.round((simNodes[i] as any).x * 10) / 10;
     graph.nodes[i].y = Math.round((simNodes[i] as any).y * 10) / 10;
   }
 }
 
-// Main
 const datasets = readdirSync(DATA_DIR, { withFileTypes: true })
   .filter(d => d.isDirectory() && d.name !== "." && d.name !== "..")
   .map(d => d.name);

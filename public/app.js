@@ -1,121 +1,47 @@
 // src/primitives.ts
 var KNOWN_PRIMITIVES = new Set([
-  "void",
-  "int",
-  "char",
-  "short",
-  "long",
-  "float",
-  "double",
-  "unsigned",
-  "signed",
+  "auto",
   "const",
+  "extern",
+  "inline",
+  "register",
+  "restrict",
+  "return",
+  "signed",
+  "static",
+  "typedef",
+  "unsigned",
+  "volatile",
   "struct",
   "union",
   "enum",
-  "volatile",
-  "static",
-  "extern",
-  "inline",
-  "restrict",
-  "register",
-  "typedef",
-  "return",
-  "__attribute__",
-  "__stdcall",
-  "__cdecl",
-  "__fastcall",
-  "VOID",
-  "__int64",
-  "__int32",
-  "__int16",
+  "void",
+  "char",
+  "short",
+  "int",
+  "long",
+  "float",
+  "double",
+  "_Bool",
+  "_Complex",
+  "_Imaginary",
   "__int8",
+  "__int16",
+  "__int32",
+  "__int64",
   "wchar_t",
   "size_t",
-  "UCHAR",
-  "USHORT",
-  "ULONG",
-  "ULONGLONG",
-  "CHAR",
-  "SHORT",
-  "LONG",
-  "LONGLONG",
-  "BOOLEAN",
-  "BOOL",
-  "BYTE",
-  "WORD",
-  "DWORD",
-  "DWORDLONG",
-  "QWORD",
-  "INT",
-  "UINT",
-  "FLOAT",
-  "DOUBLE",
-  "WCHAR",
-  "PVOID",
-  "LPVOID",
-  "LPCVOID",
-  "HANDLE",
-  "HRESULT",
-  "NTSTATUS",
-  "HMODULE",
-  "HINSTANCE",
-  "HWND",
-  "HDC",
-  "HBITMAP",
-  "HBRUSH",
-  "HFONT",
-  "HICON",
-  "HMENU",
-  "HPEN",
-  "HRGN",
-  "HPALETTE",
-  "HKEY",
-  "HMONITOR",
-  "HGLOBAL",
-  "HLOCAL",
-  "SIZE_T",
-  "SSIZE_T",
-  "ULONG_PTR",
-  "LONG_PTR",
-  "DWORD_PTR",
-  "UINT_PTR",
-  "INT_PTR",
-  "WPARAM",
-  "LPARAM",
-  "LRESULT",
-  "ATOM",
-  "COLORREF",
-  "LCID",
-  "LANGID",
-  "LPSTR",
-  "LPCSTR",
-  "LPWSTR",
-  "LPCWSTR",
-  "BSTR",
-  "VARIANT_BOOL",
-  "SCODE",
-  "DISPID",
-  "MEMBERID",
-  "LARGE_INTEGER",
-  "ULARGE_INTEGER",
-  "LUID",
-  "PUCHAR",
-  "PUSHORT",
-  "PULONG",
-  "PCHAR",
-  "PSHORT",
-  "PLONG",
-  "PBOOL",
-  "PBYTE",
-  "PWORD",
-  "PDWORD",
-  "PFLOAT",
-  "PDOUBLE",
-  "LPBOOL",
-  "LPBYTE",
-  "LPWORD",
-  "LPDWORD"
+  "__cdecl",
+  "__stdcall",
+  "__fastcall",
+  "__thiscall",
+  "__vectorcall",
+  "__attribute__",
+  "__declspec",
+  "__forceinline",
+  "NULL",
+  "TRUE",
+  "FALSE"
 ]);
 
 // src/utils.ts
@@ -169,40 +95,49 @@ var typesData;
 var constsData;
 var xref;
 var typesByName;
+var typedefsByName;
+var aliasToDecl;
+var enumAliasToDecl;
+var anonByRef;
 var funcsByName;
 var constsByName;
 var enumsByName;
+var knownNames;
 var constSet;
 var enumSet;
 var allHeaders;
 var currentDataset = "winsdk";
 var currentArch = "amd64";
+var currentMode = "user";
+var anonKey = (enclosing, path) => `${enclosing}|${path.join("/")}`;
 function extractTypeNames(typeStr) {
+  if (!typeStr)
+    return [];
   const cleaned = typeStr.replace(/__attribute__\(\([^)]*\)\)/g, "").replace(/\([^)]*\)/g, " ").replace(/[*&\[\]{}(),;]/g, " ");
   const tokens = cleaned.split(/\s+/).filter(Boolean);
   const results = [];
   for (const t of tokens) {
-    if (!KNOWN_PRIMITIVES.has(t) && /^[A-Z_][A-Za-z0-9_]*$/.test(t) && t.length > 1) {
+    if (!KNOWN_PRIMITIVES.has(t) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(t) && t.length > 1) {
       results.push(t);
     }
   }
   return results;
 }
-function resolveTypeName(token) {
-  if (typesByName.has(token))
-    return token;
-  return null;
+function isAnonName(name) {
+  return name.startsWith("<anonymous_");
 }
 function buildXRef() {
   const idx = {
-    typeToFuncParams: new Map,
-    typeToFuncReturns: new Map,
-    typeToParentTypes: new Map,
+    nameToFuncParams: new Map,
+    nameToFuncReturns: new Map,
+    nameToParentTypes: new Map,
     constToFunctions: new Map,
     constToConsts: new Map,
     enumForConstant: new Map
   };
   const addToMap = (map, key, val) => {
+    if (!key || isAnonName(key))
+      return;
     let s = map.get(key);
     if (!s) {
       s = new Set;
@@ -210,24 +145,20 @@ function buildXRef() {
     }
     s.add(val);
   };
-  for (const fn of funcsData.functions) {
-    for (const token of extractTypeNames(fn.return_type)) {
-      const resolved = resolveTypeName(token);
-      if (resolved)
-        addToMap(idx.typeToFuncReturns, resolved, fn.name);
+  const indexName = (map, raw, fname) => {
+    if (!raw)
+      return;
+    for (const token of extractTypeNames(raw)) {
+      if (knownNames.has(token))
+        addToMap(map, token, fname);
     }
+  };
+  for (const fn of funcsData.functions) {
+    indexName(idx.nameToFuncReturns, fn.return_type, fn.name);
     for (const p of fn.params) {
-      if (p.underlying_type) {
-        const resolved = resolveTypeName(p.underlying_type);
-        if (resolved)
-          addToMap(idx.typeToFuncParams, resolved, fn.name);
-      } else {
-        for (const token of extractTypeNames(p.type)) {
-          const resolved = resolveTypeName(token);
-          if (resolved)
-            addToMap(idx.typeToFuncParams, resolved, fn.name);
-        }
-      }
+      indexName(idx.nameToFuncParams, p.type, fn.name);
+      if (p.underlying_record)
+        addToMap(idx.nameToFuncParams, p.underlying_record, fn.name);
       if (p.values) {
         for (const cname of Object.keys(p.values)) {
           if (constSet.has(cname))
@@ -237,28 +168,20 @@ function buildXRef() {
     }
   }
   for (const td of typesData.types) {
+    if (td.is_anonymous)
+      continue;
     for (const f of td.fields) {
-      if (f.underlying_type) {
-        const resolved = resolveTypeName(f.underlying_type);
-        if (resolved && resolved !== td.name) {
-          addToMap(idx.typeToParentTypes, resolved, td.name);
-        }
-      } else if (f.type) {
-        for (const token of extractTypeNames(f.type)) {
-          const resolved = resolveTypeName(token);
-          if (resolved && resolved !== td.name) {
-            addToMap(idx.typeToParentTypes, resolved, td.name);
-          }
-        }
+      indexName(idx.nameToParentTypes, f.type, td.name);
+      if (f.underlying_record && f.underlying_record !== td.name) {
+        addToMap(idx.nameToParentTypes, f.underlying_record, td.name);
       }
     }
   }
   for (const c of constsData.constants) {
     if (c.components) {
       for (const comp of c.components) {
-        if (constSet.has(comp)) {
+        if (constSet.has(comp))
           addToMap(idx.constToConsts, comp, c.name);
-        }
       }
     }
   }
@@ -270,9 +193,42 @@ function buildXRef() {
   return idx;
 }
 function processData() {
+  typesByName = new Map;
+  anonByRef = new Map;
+  aliasToDecl = new Map;
+  enumAliasToDecl = new Map;
+  typedefsByName = new Map;
+  for (const td of typesData.types) {
+    if (td.is_anonymous && td.enclosing_record && td.field_path) {
+      anonByRef.set(anonKey(td.enclosing_record, td.field_path), td);
+    } else if (!isAnonName(td.name)) {
+      typesByName.set(td.name, td);
+    }
+  }
   for (const rt of typesData.referenced_types) {
-    if (!typesData.types.find((t) => t.name === rt.name)) {
-      typesData.types.push(rt);
+    if (rt.is_anonymous && rt.enclosing_record && rt.field_path) {
+      anonByRef.set(anonKey(rt.enclosing_record, rt.field_path), rt);
+    } else if (!isAnonName(rt.name) && !typesByName.has(rt.name)) {
+      typesByName.set(rt.name, rt);
+    }
+  }
+  for (const td of typesByName.values()) {
+    if (td.aliases) {
+      for (const a of td.aliases) {
+        if (!aliasToDecl.has(a))
+          aliasToDecl.set(a, td.name);
+      }
+    }
+  }
+  for (const t of typesData.typedefs ?? []) {
+    typedefsByName.set(t.name, t);
+    if (t.canonical_decl_name && typesByName.has(t.canonical_decl_name)) {
+      if (!aliasToDecl.has(t.name))
+        aliasToDecl.set(t.name, t.canonical_decl_name);
+    }
+    if (t.kind === "enum" && t.canonical_decl_name) {
+      if (!enumAliasToDecl.has(t.name))
+        enumAliasToDecl.set(t.name, t.canonical_decl_name);
     }
   }
   for (const rc of constsData.referred_components) {
@@ -280,7 +236,6 @@ function processData() {
       constsData.constants.push(rc);
     }
   }
-  typesByName = new Map(typesData.types.map((t) => [t.name, t]));
   funcsByName = new Map(funcsData.functions.map((f) => [f.name, f]));
   constsByName = new Map(constsData.constants.map((c) => [c.name, c]));
   enumsByName = new Map(constsData.enums.map((e) => [e.name, e]));
@@ -290,13 +245,53 @@ function processData() {
       constSet.add(c.name);
   }
   enumSet = new Set(enumsByName.keys());
+  const registerEnumAlias = (typeStr, underlying) => {
+    if (!typeStr || !underlying)
+      return;
+    if (!enumsByName.has(underlying))
+      return;
+    const m = typeStr.match(/[A-Za-z_][A-Za-z0-9_]*/);
+    if (!m)
+      return;
+    const alias = m[0];
+    if (alias === underlying)
+      return;
+    if (KNOWN_PRIMITIVES.has(alias))
+      return;
+    if (!enumAliasToDecl.has(alias))
+      enumAliasToDecl.set(alias, underlying);
+  };
+  for (const fn of funcsData.functions) {
+    for (const p of fn.params)
+      registerEnumAlias(p.type, p.underlying_record);
+  }
+  for (const td of typesByName.values()) {
+    if (td.is_anonymous)
+      continue;
+    for (const f of td.fields)
+      registerEnumAlias(f.type, f.underlying_record);
+  }
+  knownNames = new Set;
+  for (const n of typesByName.keys())
+    knownNames.add(n);
+  for (const n of typedefsByName.keys())
+    knownNames.add(n);
+  for (const n of aliasToDecl.keys())
+    knownNames.add(n);
+  for (const n of enumsByName.keys())
+    knownNames.add(n);
+  for (const n of enumAliasToDecl.keys())
+    knownNames.add(n);
   allHeaders = new Set;
   for (const fn of funcsData.functions)
     if (fn.location.file)
       allHeaders.add(fn.location.file);
-  for (const td of typesData.types)
+  for (const td of typesByName.values())
     if (td.location.file)
       allHeaders.add(td.location.file);
+  for (const t of typedefsByName.values())
+    if (t.location.file)
+      allHeaders.add(t.location.file);
   for (const c of constsData.constants)
     if (c.location.file)
       allHeaders.add(c.location.file);
@@ -321,20 +316,23 @@ async function dataPathExists(prefix) {
   }
   return false;
 }
-async function loadData(dataset, arch) {
+async function loadData(dataset, arch, mode) {
   if (dataset)
     currentDataset = dataset;
   if (arch)
     currentArch = arch;
-  let prefix = `data/${currentDataset}/${currentArch}`;
+  if (mode)
+    currentMode = mode;
+  const suffix = currentMode === "kernel" ? "-kernel" : "";
+  let prefix = `data/${currentDataset}${suffix}/${currentArch}`;
   if (!await dataPathExists(prefix)) {
-    prefix = `data/${currentDataset}`;
+    prefix = `data/${currentDataset}${suffix}`;
     if (!await dataPathExists(prefix)) {
       prefix = "data";
     }
   }
   const emptyFuncs = { command: "", functions: [] };
-  const emptyTypes = { command: "", types: [], referenced_types: [] };
+  const emptyTypes = { command: "", types: [], referenced_types: [], typedefs: [] };
   const emptyConsts = { command: "", constants: [], enums: [], referred_components: [] };
   const fetchJson = async (url, fallback) => {
     try {
@@ -354,6 +352,8 @@ async function loadData(dataset, arch) {
   funcsData = f;
   typesData = t;
   constsData = c;
+  if (!typesData.typedefs)
+    typesData.typedefs = [];
   processData();
 }
 function getCurrentDataset() {
@@ -361,6 +361,9 @@ function getCurrentDataset() {
 }
 function getCurrentArch() {
   return currentArch;
+}
+function getCurrentMode() {
+  return currentMode;
 }
 async function getAvailableDatasets() {
   const datasets = [];
@@ -378,11 +381,13 @@ async function getAvailableDatasets() {
     datasets.push("winsdk");
   return datasets;
 }
-async function getAvailableArchs(dataset) {
+async function getAvailableArchs(dataset, mode) {
   const ds = dataset ?? currentDataset;
+  const m = mode ?? currentMode;
+  const suffix = m === "kernel" ? "-kernel" : "";
   const archs = [];
   for (const arch of ["amd64", "x86", "arm", "arm64"]) {
-    if (await dataPathExists(`data/${ds}/${arch}`))
+    if (await dataPathExists(`data/${ds}${suffix}/${arch}`))
       archs.push(arch);
   }
   if (archs.length === 0)
@@ -393,7 +398,10 @@ function getFunctions() {
   return funcsData.functions;
 }
 function getTypes() {
-  return typesData.types;
+  return [...typesByName.values()];
+}
+function getTypedefs() {
+  return typesData.typedefs ?? [];
 }
 function getConstants() {
   return constsData.constants;
@@ -411,19 +419,26 @@ function hasConst(name) {
   return constSet.has(name);
 }
 function findType(name) {
-  return typesByName.get(name);
+  return typesByName.get(name) ?? typesByName.get(aliasToDecl.get(name) ?? "");
 }
-function flexFindType(name) {
-  let t = typesByName.get(name);
+function findTypedef(name) {
+  return typedefsByName.get(name);
+}
+function findAnon(enclosing, path) {
+  return anonByRef.get(anonKey(enclosing, path));
+}
+function resolveTypeOrTypedef(name) {
+  const td = typesByName.get(name);
+  if (td)
+    return { kind: "type", type: td, canonical: name };
+  const t = typedefsByName.get(name);
   if (t)
-    return { canonical: name, item: t };
-  t = typesByName.get("_" + name);
-  if (t)
-    return { canonical: "_" + name, item: t };
-  if (name.startsWith("_")) {
-    t = typesByName.get(name.slice(1));
-    if (t)
-      return { canonical: name.slice(1), item: t };
+    return { kind: "typedef", typedef: t };
+  const alias = aliasToDecl.get(name);
+  if (alias) {
+    const aliased = typesByName.get(alias);
+    if (aliased)
+      return { kind: "type", type: aliased, canonical: alias };
   }
   return;
 }
@@ -445,6 +460,26 @@ function cleanDll(dll) {
 function canonicalTypeName(token) {
   if (typesByName.has(token))
     return token;
+  if (typedefsByName.has(token))
+    return token;
+  const aliased = aliasToDecl.get(token);
+  if (aliased)
+    return aliased;
+  return null;
+}
+function resolveLinkName(token) {
+  if (typesByName.has(token))
+    return { kind: "type", canonical: token };
+  const aliased = aliasToDecl.get(token);
+  if (aliased)
+    return { kind: "type", canonical: aliased };
+  if (typedefsByName.has(token))
+    return { kind: "typedef", canonical: token };
+  if (enumsByName.has(token))
+    return { kind: "enum", canonical: token };
+  const enumAlias = enumAliasToDecl.get(token);
+  if (enumAlias)
+    return { kind: "enum", canonical: enumAlias };
   return null;
 }
 function searchAll(query, limit = 20) {
@@ -468,10 +503,19 @@ function searchAll(query, limit = 20) {
     if (s > 0)
       results.push({ kind: "function", name: f.name, score: s });
   }
-  for (const t of typesData.types) {
+  for (const t of typesByName.values()) {
+    if (isAnonName(t.name))
+      continue;
     const s = score(t.name);
     if (s > 0)
       results.push({ kind: "type", name: t.name, score: s });
+  }
+  for (const td of typedefsByName.values()) {
+    if (isAnonName(td.name))
+      continue;
+    const s = score(td.name);
+    if (s > 0)
+      results.push({ kind: "typedef", name: td.name, score: s });
   }
   for (const c of constsData.constants) {
     const s = score(c.name);
@@ -491,14 +535,18 @@ function findSimilarNames(query, limit = 5) {
   const maxDist = Math.max(5, Math.floor(q.length * 0.4));
   const candidates = [];
   const check = (name, kind) => {
+    if (isAnonName(name))
+      return;
     const d = levenshtein(q, name.toLowerCase());
     if (d > 0 && d <= maxDist)
       candidates.push({ kind, name, dist: d });
   };
   for (const f of funcsData.functions)
     check(f.name, "function");
-  for (const t of typesData.types)
+  for (const t of typesByName.values())
     check(t.name, "type");
+  for (const t of typedefsByName.values())
+    check(t.name, "typedef");
   for (const c of constsData.constants)
     check(c.name, "constant");
   for (const e of constsData.enums)
@@ -524,6 +572,8 @@ function injectContext(raw) {
     params.set("ds", getCurrentDataset());
   if (!params.has("arch"))
     params.set("arch", getCurrentArch());
+  if (!params.has("mode"))
+    params.set("mode", getCurrentMode());
   return `${path}?${params}`;
 }
 function buildHash(pathWithQuery) {
@@ -566,16 +616,18 @@ function startRouter() {
     const query = parseQuery(qs ?? "");
     const effectiveDs = query.ds ?? "winsdk";
     const effectiveArch = query.arch ?? "amd64";
+    const effectiveMode = query.mode ?? "user";
     delete query.ds;
     delete query.arch;
-    if (effectiveDs !== getCurrentDataset() || effectiveArch !== getCurrentArch()) {
-      await loadData(effectiveDs, effectiveArch);
+    delete query.mode;
+    if (effectiveDs !== getCurrentDataset() || effectiveArch !== getCurrentArch() || effectiveMode !== getCurrentMode()) {
+      await loadData(effectiveDs, effectiveArch, effectiveMode);
       if (myId !== dispatchId)
         return;
       if (onDatasetChange)
         await onDatasetChange();
     }
-    if (!qs || !qs.includes("ds=") || !qs.includes("arch=")) {
+    if (!qs || !qs.includes("ds=") || !qs.includes("arch=") || !qs.includes("mode=")) {
       history.replaceState(null, "", "#" + injectContext(raw));
     }
     if (myId !== dispatchId)
@@ -655,24 +707,34 @@ function setupTheme() {
 }
 
 // src/dataset-switcher.ts
-function buildSwitchParams(ds, arch) {
+function buildSwitchParams(ds, arch, mode) {
   const params = new URLSearchParams;
   params.set("ds", ds);
   params.set("arch", arch);
+  params.set("mode", mode);
   return `?${params}`;
 }
 function setupDatasetSwitcher() {
   const dsButtons = $$(".dataset-btn");
   const archContainer = $(".arch-switcher");
+  const modeContainer = $(".mode-switcher");
   function syncButtonStates() {
     const ds = getCurrentDataset();
     const arch = getCurrentArch();
+    const mode = getCurrentMode();
     for (const btn of dsButtons) {
       btn.classList.toggle("active", btn.getAttribute("data-dataset") === ds);
     }
     for (const btn of archContainer.querySelectorAll(".arch-btn")) {
       btn.classList.toggle("active", btn.getAttribute("data-arch") === arch);
     }
+    for (const btn of modeContainer.querySelectorAll(".mode-btn")) {
+      btn.classList.toggle("active", btn.getAttribute("data-mode") === mode);
+    }
+  }
+  function currentPath() {
+    const hash = window.location.hash.slice(1) || "/";
+    return hash.split("?")[0];
   }
   async function refreshArchButtons() {
     archContainer.innerHTML = "";
@@ -690,9 +752,7 @@ function setupDatasetSwitcher() {
       btn.addEventListener("click", () => {
         if (arch === getCurrentArch())
           return;
-        const hash = window.location.hash.slice(1) || "/";
-        const [path] = hash.split("?");
-        navigate(path + buildSwitchParams(getCurrentDataset(), arch));
+        navigate(currentPath() + buildSwitchParams(getCurrentDataset(), arch, getCurrentMode()));
       });
       archContainer.appendChild(btn);
     }
@@ -702,9 +762,15 @@ function setupDatasetSwitcher() {
       const dataset = btn.getAttribute("data-dataset");
       if (dataset === getCurrentDataset())
         return;
-      const hash = window.location.hash.slice(1) || "/";
-      const [path] = hash.split("?");
-      navigate(path + buildSwitchParams(dataset, getCurrentArch()));
+      navigate(currentPath() + buildSwitchParams(dataset, getCurrentArch(), getCurrentMode()));
+    });
+  }
+  for (const btn of modeContainer.querySelectorAll(".mode-btn")) {
+    btn.addEventListener("click", () => {
+      const mode = btn.getAttribute("data-mode");
+      if (mode === getCurrentMode())
+        return;
+      navigate(currentPath() + buildSwitchParams(getCurrentDataset(), getCurrentArch(), mode));
     });
   }
   setOnDatasetChange(async () => {
@@ -742,8 +808,11 @@ function funcLink(name) {
 function constLink(name) {
   return el("a", { className: "xref xref-const", href: buildHash("/constants/" + encodeURIComponent(name)) }, name);
 }
-function enumLink(name) {
-  return el("a", { className: "xref xref-enum", href: buildHash("/constants/enum/" + encodeURIComponent(name)) }, name);
+function enumLink(name, displayName) {
+  return el("a", {
+    className: "xref xref-enum",
+    href: buildHash("/constants/enum/" + encodeURIComponent(name))
+  }, displayName ?? name);
 }
 function headerLink(header, view = "functions") {
   return el("a", {
@@ -754,24 +823,41 @@ function headerLink(header, view = "functions") {
 function badge(text, cls = "") {
   return el("span", { className: `badge ${cls}`.trim() }, text);
 }
+function linkForResolution(displayName, r) {
+  if (!r)
+    return null;
+  if (r.kind === "enum")
+    return enumLink(r.canonical, displayName);
+  return typeLink(r.canonical, displayName);
+}
 function renderTypeStr(typeStr, underlyingType) {
   const span = el("span", { className: "type-str" });
+  if (!typeStr) {
+    span.appendChild(document.createTextNode("(anonymous)"));
+    return span;
+  }
   const parts = typeStr.split(/\b/);
   let linked = false;
   for (const part of parts) {
-    const canonical = canonicalTypeName(part);
-    if (canonical) {
-      span.appendChild(typeLink(canonical, part));
-      linked = true;
-    } else {
-      span.appendChild(document.createTextNode(part));
+    const r = resolveLinkName(part);
+    if (r) {
+      const link = linkForResolution(part, r);
+      if (link) {
+        span.appendChild(link);
+        linked = true;
+        continue;
+      }
     }
+    span.appendChild(document.createTextNode(part));
   }
   if (!linked && underlyingType) {
-    const resolved = canonicalTypeName(underlyingType);
-    if (resolved) {
-      span.innerHTML = "";
-      span.appendChild(typeLink(resolved, typeStr));
+    const r = resolveLinkName(underlyingType);
+    if (r) {
+      const link = linkForResolution(typeStr, r);
+      if (link) {
+        span.innerHTML = "";
+        span.appendChild(link);
+      }
     }
   }
   return span;
@@ -797,6 +883,7 @@ function getHref(item) {
     case "function":
       return buildHash(`/functions/${encodeURIComponent(item.name)}`);
     case "type":
+    case "typedef":
       return buildHash(`/types/${encodeURIComponent(item.name)}`);
     case "constant":
       return buildHash(`/constants/${encodeURIComponent(item.name)}`);
@@ -812,6 +899,8 @@ function getBadge(kind) {
       return badge("fn", "search-badge-fn");
     case "type":
       return badge("type", "search-badge-type");
+    case "typedef":
+      return badge("typedef", "search-badge-typedef");
     case "constant":
       return badge("const", "search-badge-const");
     case "enum":
@@ -857,17 +946,20 @@ function renderPreview(item) {
     const td = findType(item.name);
     if (td) {
       const info = el("div", { className: "sp-info" });
+      info.appendChild(el("div", {}, `kind: ${td.kind ?? "struct"}`));
       info.appendChild(el("div", {}, `size: ${td.size !== null ? td.size + "B" : "opaque"}`));
       info.appendChild(el("div", {}, `fields: ${td.fields.length}`));
       info.appendChild(el("div", {}, `header: ${td.location.file ?? "?"}`));
+      if (td.aliases?.length)
+        info.appendChild(el("div", {}, `aka: ${td.aliases.slice(0, 3).join(", ")}`));
       previewPane.appendChild(info);
       if (td.fields.length > 0) {
         const fields = el("div", { className: "sp-fields" });
         for (const f of td.fields.slice(0, 12)) {
           const row = el("div", { className: "sp-field-row" });
           row.appendChild(el("span", { className: "sp-field-off" }, `0x${f.offset.toString(16).toUpperCase()}`));
-          row.appendChild(el("span", { className: "sp-field-name" }, f.name));
-          row.appendChild(el("span", { className: "sp-field-type" }, f.type ?? "?"));
+          row.appendChild(el("span", { className: "sp-field-name" }, f.is_anonymous ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name));
+          row.appendChild(el("span", { className: "sp-field-type" }, f.type ?? "—"));
           fields.appendChild(row);
         }
         if (td.fields.length > 12) {
@@ -875,6 +967,21 @@ function renderPreview(item) {
         }
         previewPane.appendChild(fields);
       }
+    }
+  } else if (item.kind === "typedef") {
+    const t = findTypedef(item.name);
+    if (t) {
+      const info = el("div", { className: "sp-info" });
+      info.appendChild(el("div", {}, `kind: ${t.kind}`));
+      info.appendChild(el("div", {}, `canonical: ${t.canonical}`));
+      if (t.underlying_record)
+        info.appendChild(el("div", {}, `record: ${t.underlying_record}`));
+      else if (t.underlying_type)
+        info.appendChild(el("div", {}, `primitive: ${t.underlying_type}`));
+      info.appendChild(el("div", {}, `header: ${t.location.file ?? "?"}`));
+      if (t.chain.length > 1)
+        info.appendChild(el("div", {}, `chain: ${t.name} → ${t.chain.join(" → ")}`));
+      previewPane.appendChild(info);
     }
   } else if (item.kind === "constant") {
     const c = findConst(item.name);
@@ -1235,6 +1342,95 @@ function initClippy() {
   }
 }
 
+// src/irql.ts
+var IRQL_LEVELS = {
+  PASSIVE_LEVEL: 0,
+  APC_LEVEL: 1,
+  DISPATCH_LEVEL: 2,
+  DPC_LEVEL: 2,
+  HIGH_LEVEL: 31,
+  IPI_LEVEL: 31
+};
+function isNumericLevel(level) {
+  return level.toUpperCase() in IRQL_LEVELS;
+}
+function parseIrqlExpr(input2) {
+  const trimmed = input2.trim();
+  if (!trimmed)
+    return null;
+  const m = trimmed.match(/^(<=|>=|==|<|>|=)?\s*([A-Za-z_]+)$/);
+  if (!m)
+    return null;
+  const op = m[1] ?? null;
+  const level = m[2].toUpperCase();
+  return { op, level };
+}
+function constraintRange(c) {
+  const level = c.level.toUpperCase();
+  if (!isNumericLevel(level))
+    return null;
+  const v = IRQL_LEVELS[level];
+  switch (c.op) {
+    case null:
+    case undefined:
+    case "=":
+    case "==":
+      return [v, v];
+    case ">=":
+      return [v, 31];
+    case ">":
+      return v >= 31 ? null : [v + 1, 31];
+    case "<=":
+      return [0, v];
+    case "<":
+      return v <= 0 ? null : [0, v - 1];
+    default:
+      return [v, v];
+  }
+}
+function irqlMatches(filter, fn) {
+  if (!fn)
+    return false;
+  if (!isNumericLevel(filter.level))
+    return false;
+  const fnRange = constraintRange(fn);
+  if (!fnRange)
+    return false;
+  const [fnMin, fnMax] = fnRange;
+  const v = IRQL_LEVELS[filter.level.toUpperCase()];
+  switch (filter.op) {
+    case null:
+    case "=":
+    case "==":
+      return fnMin <= v && v <= fnMax;
+    case "<":
+      return fnMax < v;
+    case "<=":
+      return fnMax <= v;
+    case ">":
+      return fnMin > v;
+    case ">=":
+      return fnMin >= v;
+  }
+}
+function formatIrql(expr) {
+  if (!expr.op)
+    return expr.level;
+  return `${expr.op} ${expr.level}`;
+}
+function irqlSeverityClass(expr) {
+  if (!isNumericLevel(expr.level))
+    return "irql-unknown";
+  const v = IRQL_LEVELS[expr.level.toUpperCase()];
+  if (v === 0)
+    return "irql-passive";
+  if (v <= 1)
+    return "irql-apc";
+  if (v <= 2)
+    return "irql-dispatch";
+  return "irql-high";
+}
+
 // src/views/home.ts
 function countBy(items, keyFn) {
   const counts = new Map;
@@ -1346,9 +1542,13 @@ function renderHome(container) {
   clear(container);
   const funcs = getFunctions();
   const types = getTypes();
+  const typedefs = getTypedefs();
   const consts = getConstants();
   const enums = getEnums();
   const xref2 = getXRef();
+  const isKernel = getCurrentMode() === "kernel";
+  const unionTypes = types.filter((t) => (t.kind ?? "struct") === "union");
+  const structTypes = types.filter((t) => (t.kind ?? "struct") === "struct");
   const page = el("div", { className: "home-view" });
   page.appendChild(el("div", { className: "hero" }, el("h1", {}, "bb viewer"), el("p", { className: "hero-sub" }, "Windows SDK & PHNT header analysis explorer")));
   const statsRow = el("div", { className: "stats-row" });
@@ -1361,10 +1561,14 @@ function renderHome(container) {
   fnCard.style.cursor = "pointer";
   fnCard.addEventListener("click", () => navigate("/functions"));
   statsRow.appendChild(fnCard);
-  const tCard = statCard("Types", types.length.toLocaleString(), `${withFields.toLocaleString()} with fields`);
+  const tCard = statCard("Types", types.length.toLocaleString(), `${structTypes.length.toLocaleString()} struct · ${unionTypes.length.toLocaleString()} union`);
   tCard.style.cursor = "pointer";
   tCard.addEventListener("click", () => navigate("/types"));
   statsRow.appendChild(tCard);
+  const tdCard = statCard("Typedefs", typedefs.length.toLocaleString(), `${withFields.toLocaleString()} types with fields`);
+  tdCard.style.cursor = "pointer";
+  tdCard.addEventListener("click", () => navigate("/types"));
+  statsRow.appendChild(tdCard);
   const cCard = statCard("Constants", consts.length.toLocaleString(), `${withComponents.toLocaleString()} composed`);
   cCard.style.cursor = "pointer";
   cCard.addEventListener("click", () => navigate("/constants"));
@@ -1379,6 +1583,12 @@ function renderHome(container) {
   statsRow.appendChild(statCard("Avg Type Size", avgSize + " B"));
   page.appendChild(statsRow);
   const chartsRow = el("div", { className: "charts-row" });
+  const sourceCounts = countBy(funcs, (f) => f.metadata?.source ?? null);
+  if (sourceCounts.length > 1) {
+    chartsRow.appendChild(barChart("Functions by MSDN source", sourceCounts, {
+      onClick: (s) => navigate(`/functions?source=${encodeURIComponent(s)}`)
+    }));
+  }
   function parseWinVersion(mc) {
     const s = mc.replace(/\u00a0/g, " ");
     if (s.includes("Windows 11"))
@@ -1447,15 +1657,56 @@ function renderHome(container) {
       onClick: (ver) => navigate(`/functions?minServer=${encodeURIComponent(ver)}`)
     }));
   }
+  if (isKernel) {
+    const kmdfCounts = countBy(funcs, (f) => f.driver?.kmdf_ver ? `KMDF ${f.driver.kmdf_ver}` : null);
+    if (kmdfCounts.length > 0) {
+      chartsRow.appendChild(barChart("Functions by KMDF version", kmdfCounts, {
+        allItems: kmdfCounts,
+        onClick: (k) => {
+          const ver = k.replace(/^KMDF /, "");
+          navigate(`/functions?kmdf=${encodeURIComponent(ver)}`);
+        }
+      }));
+    }
+    const umdfCounts = countBy(funcs, (f) => f.driver?.umdf_ver ? `UMDF ${f.driver.umdf_ver}` : null);
+    if (umdfCounts.length > 0) {
+      chartsRow.appendChild(barChart("Functions by UMDF version", umdfCounts, {
+        allItems: umdfCounts,
+        onClick: (k) => {
+          const ver = k.replace(/^UMDF /, "");
+          navigate(`/functions?umdf=${encodeURIComponent(ver)}`);
+        }
+      }));
+    }
+    const irqlCounts = new Map;
+    for (const f of funcs) {
+      const irql = f.driver?.irql;
+      if (irql && isNumericLevel(irql.level)) {
+        const key = formatIrql(irql);
+        irqlCounts.set(key, (irqlCounts.get(key) ?? 0) + 1);
+      }
+    }
+    if (irqlCounts.size > 0) {
+      const sorted = [...irqlCounts.entries()].sort((a, b) => {
+        const la = a[0].split(" ").pop();
+        const lb = b[0].split(" ").pop();
+        return (IRQL_LEVELS[la] ?? 99) - (IRQL_LEVELS[lb] ?? 99);
+      });
+      chartsRow.appendChild(barChart("Functions by IRQL constraint", sorted, {
+        allItems: sorted,
+        onClick: (k) => navigate(`/functions?irql=${encodeURIComponent(k)}`)
+      }));
+    }
+  }
   const allDlls = countBy(funcs.filter((f) => f.metadata?.dll), (f) => cleanDll(f.metadata.dll));
   chartsRow.appendChild(barChart("Top DLLs", allDlls.slice(0, 10), {
     allItems: allDlls,
     onClick: (dll) => navigate(`/functions?dll=${encodeURIComponent(dll)}`)
   }));
   const typeRefCounts = new Map;
-  for (const [name, fns] of xref2.typeToFuncParams)
+  for (const [name, fns] of xref2.nameToFuncParams)
     typeRefCounts.set(name, (typeRefCounts.get(name) ?? 0) + fns.size);
-  for (const [name, fns] of xref2.typeToFuncReturns)
+  for (const [name, fns] of xref2.nameToFuncReturns)
     typeRefCounts.set(name, (typeRefCounts.get(name) ?? 0) + fns.size);
   const allTypeRefs = [...typeRefCounts.entries()].sort((a, b) => b[1] - a[1]);
   chartsRow.appendChild(barChart("Most referenced types (in functions)", allTypeRefs.slice(0, 10), {
@@ -1804,6 +2055,16 @@ function renderPagination(container, currentPage, totalPages, onPage) {
 
 // src/views/functions.ts
 var PAGE_SIZE = 50;
+function stackBytes(fn) {
+  return fn.params.filter((p) => p.abi.kind === "stack").reduce((s, p) => s + (p.abi.size ?? 0), 0);
+}
+function maxStackParam(fn) {
+  let m = 0;
+  for (const p of fn.params)
+    if (p.abi.kind === "stack" && (p.abi.size ?? 0) > m)
+      m = p.abi.size;
+  return m;
+}
 function renderAbiDiagram(fn) {
   const diagram = el("div", { className: "abi-diagram" });
   const regParams = fn.params.filter((p) => p.abi.kind === "reg");
@@ -1817,7 +2078,7 @@ function renderAbiDiagram(fn) {
       row.appendChild(el("div", { className: "abi-reg-badge" }, p.abi.register));
       const info = el("div", { className: "abi-slot-info" });
       info.appendChild(el("span", { className: "abi-param-name" }, p.name ?? `arg${p.index}`));
-      const typeEl = renderTypeStr(p.type, p.underlying_type);
+      const typeEl = renderTypeStr(p.type, p.underlying_type ?? p.underlying_record);
       typeEl.className += " abi-param-type";
       info.appendChild(typeEl);
       for (const d of p.directions)
@@ -1837,7 +2098,7 @@ function renderAbiDiagram(fn) {
       row.appendChild(el("div", { className: "abi-stack-badge" }, `RSP+0x${(p.abi.offset ?? 0).toString(16).toUpperCase()}`));
       const info = el("div", { className: "abi-slot-info" });
       info.appendChild(el("span", { className: "abi-param-name" }, p.name ?? `arg${p.index}`));
-      const typeEl = renderTypeStr(p.type, p.underlying_type);
+      const typeEl = renderTypeStr(p.type, p.underlying_type ?? p.underlying_record);
       typeEl.className += " abi-param-type";
       info.appendChild(typeEl);
       for (const d of p.directions)
@@ -1856,7 +2117,7 @@ function renderAbiDiagram(fn) {
       row.appendChild(el("div", { className: "abi-indirect-badge" }, "PTR"));
       const info = el("div", { className: "abi-slot-info" });
       info.appendChild(el("span", { className: "abi-param-name" }, p.name ?? `arg${p.index}`));
-      const typeEl = renderTypeStr(p.type, p.underlying_type);
+      const typeEl = renderTypeStr(p.type, p.underlying_type ?? p.underlying_record);
       typeEl.className += " abi-param-type";
       info.appendChild(typeEl);
       row.appendChild(info);
@@ -1912,7 +2173,7 @@ function renderFuncDetailView(fn) {
   fn.params.forEach((p, i) => {
     if (i > 0)
       sig.appendChild(document.createTextNode(", "));
-    renderTypeStr(p.type, p.underlying_type).childNodes.forEach((n) => sig.appendChild(n.cloneNode(true)));
+    renderTypeStr(p.type, p.underlying_type ?? p.underlying_record).childNodes.forEach((n) => sig.appendChild(n.cloneNode(true)));
     if (p.name) {
       sig.appendChild(document.createTextNode(" "));
       sig.appendChild(el("span", { className: "param-name-sig" }, p.name));
@@ -1927,6 +2188,14 @@ function renderFuncDetailView(fn) {
     tags.appendChild(badge("exported", "tag-exported"));
   if (fn.has_body)
     tags.appendChild(badge("has body", "tag-body"));
+  if (fn.metadata?.source)
+    tags.appendChild(badge(`source: ${fn.metadata.source}`, `tag-src-${fn.metadata.source}`));
+  if (fn.driver?.tech_root)
+    tags.appendChild(badge(`tech: ${fn.driver.tech_root}`, "tag-tech"));
+  if (fn.driver?.irql) {
+    const sev = irqlSeverityClass(fn.driver.irql);
+    tags.appendChild(badge(`IRQL ${formatIrql(fn.driver.irql)}`, `tag-irql ${sev}`));
+  }
   const locTag = el("span", { className: "badge tag-loc" });
   locTag.appendChild(headerLink(fn.location.file ?? "?", "functions"));
   locTag.appendChild(document.createTextNode(`:${fn.location.line}`));
@@ -1963,8 +2232,40 @@ function renderFuncDetailView(fn) {
     }
     detail.appendChild(collapsibleSection("MSDN Metadata", grid));
   }
+  if (fn.driver) {
+    const d = fn.driver;
+    const dgrid = el("div", { className: "meta-grid" });
+    if (d.tech_root)
+      dgrid.appendChild(el("div", {}, el("strong", {}, "Tech root: "), document.createTextNode(d.tech_root)));
+    if (d.include_header)
+      dgrid.appendChild(el("div", {}, el("strong", {}, "Include header: "), el("code", {}, d.include_header)));
+    if (d.target_type)
+      dgrid.appendChild(el("div", {}, el("strong", {}, "Target type: "), document.createTextNode(d.target_type)));
+    if (d.construct_type)
+      dgrid.appendChild(el("div", {}, el("strong", {}, "Construct type: "), document.createTextNode(d.construct_type)));
+    if (d.kmdf_ver)
+      dgrid.appendChild(el("div", {}, el("strong", {}, "KMDF version: "), document.createTextNode(`${d.kmdf_ver}+`)));
+    if (d.umdf_ver)
+      dgrid.appendChild(el("div", {}, el("strong", {}, "UMDF version: "), document.createTextNode(`${d.umdf_ver}+`)));
+    if (d.irql) {
+      const row = el("div", {});
+      row.appendChild(el("strong", {}, "IRQL: "));
+      row.appendChild(badge(formatIrql(d.irql), `tag-irql ${irqlSeverityClass(d.irql)}`));
+      dgrid.appendChild(row);
+    }
+    if (d.irql_raw && (!d.irql || d.irql_raw !== formatIrql(d.irql))) {
+      dgrid.appendChild(el("div", {}, el("strong", {}, "IRQL (raw): "), el("span", { className: "dim mono" }, d.irql_raw)));
+    }
+    if (dgrid.childNodes.length > 0) {
+      detail.appendChild(collapsibleSection("Driver Metadata", dgrid));
+    }
+  }
   if (fn.params.length > 0) {
     detail.appendChild(collapsibleSection("ABI Layout", renderAbiDiagram(fn)));
+    const sb = stackBytes(fn);
+    if (sb > 0) {
+      detail.appendChild(el("div", { className: "abi-stack-summary dim" }, `Stack-passed: ${sb}B total, largest single param ${maxStackParam(fn)}B`));
+    }
   }
   const paramsWithVals = fn.params.filter((p) => Object.keys(p.values ?? {}).length > 0);
   if (paramsWithVals.length > 0) {
@@ -1980,8 +2281,9 @@ function renderFuncDetailView(fn) {
   }
   const typesUsed = new Set;
   for (const p of fn.params) {
-    if (p.underlying_type && findType(p.underlying_type))
-      typesUsed.add(p.underlying_type);
+    const ref = p.underlying_record;
+    if (ref && findType(ref))
+      typesUsed.add(ref);
   }
   if (typesUsed.size > 0) {
     const list = el("div", { className: "xref-list" });
@@ -1999,7 +2301,8 @@ function renderFuncDetailView(fn) {
 }
 function renderFunctionsList(container, query = {}) {
   clear(container);
-  const hasQueryOverride = !!(query.header || query.dll || query.q || query.returnType || query.minParams || query.maxParams || query.ptrDepth || query.minClient || query.minServer || query.exported);
+  const isKernel = getCurrentMode() === "kernel";
+  const hasQueryOverride = !!(query.header || query.dll || query.q || query.returnType || query.minParams || query.maxParams || query.ptrDepth || query.minClient || query.minServer || query.exported || query.irql || query.source || query.tech || query.kmdf || query.umdf);
   let filterExported = query.exported ?? (hasQueryOverride ? "all" : "yes");
   const filterHeaders = new Set(query.header ? query.header.split(",") : []);
   const filterReturnTypes = new Set(query.returnType ? query.returnType.split(",") : []);
@@ -2009,12 +2312,20 @@ function renderFunctionsList(container, query = {}) {
   let filterPointerDepth = parseInt(query.ptrDepth ?? "") || -1;
   let filterMinClient = query.minClient ?? "";
   let filterMinServer = query.minServer ?? "";
+  let filterIrql = query.irql ?? "";
+  let filterSource = query.source ?? "";
+  const filterTech = new Set(query.tech ? query.tech.split(",") : []);
+  const filterKmdf = new Set(query.kmdf ? query.kmdf.split(",") : []);
+  const filterUmdf = new Set(query.umdf ? query.umdf.split(",") : []);
   let page = parseInt(query.page ?? "") || 0;
   let searchQuery = query.q ?? "";
   let useRegex = query.regex === "1";
   let headerDropdown;
   let returnTypeDropdown;
   let dllDropdown;
+  let techDropdown;
+  let kmdfDropdown;
+  let umdfDropdown;
   function syncUrl() {
     const s = sort?.getState();
     syncViewUrl("/functions", {
@@ -2029,6 +2340,11 @@ function renderFunctionsList(container, query = {}) {
       ptrDepth: filterPointerDepth >= 0 ? String(filterPointerDepth) : "",
       minClient: filterMinClient,
       minServer: filterMinServer,
+      irql: filterIrql,
+      source: filterSource,
+      tech: [...filterTech].join(","),
+      kmdf: [...filterKmdf].join(","),
+      umdf: [...filterUmdf].join(","),
       sort: s && s.sortBy !== "name" ? s.sortBy : "",
       sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
       page: page > 0 ? String(page) : ""
@@ -2042,6 +2358,9 @@ function renderFunctionsList(container, query = {}) {
     headerDropdown?.refresh();
     returnTypeDropdown?.refresh();
     dllDropdown?.refresh();
+    techDropdown?.refresh();
+    kmdfDropdown?.refresh();
+    umdfDropdown?.refresh();
     rebuildChips();
     renderList();
     syncUrl();
@@ -2075,27 +2394,56 @@ function renderFunctionsList(container, query = {}) {
         refreshAll();
       } });
     }
-    if (filterPointerDepth >= 0) {
+    if (filterPointerDepth >= 0)
       chips.push({ label: `Ptr depth: ${filterPointerDepth}`, onRemove: () => {
         filterPointerDepth = -1;
         page = 0;
         refreshAll();
       } });
-    }
-    if (filterMinClient) {
+    if (filterMinClient)
       chips.push({ label: `Client: ${filterMinClient}`, onRemove: () => {
         filterMinClient = "";
         page = 0;
         refreshAll();
       } });
-    }
-    if (filterMinServer) {
+    if (filterMinServer)
       chips.push({ label: `Server: ${filterMinServer}`, onRemove: () => {
         filterMinServer = "";
         page = 0;
         refreshAll();
       } });
-    }
+    if (filterIrql)
+      chips.push({ label: `IRQL: ${filterIrql}`, onRemove: () => {
+        filterIrql = "";
+        if (irqlInput)
+          irqlInput.value = "";
+        page = 0;
+        refreshAll();
+      } });
+    if (filterSource)
+      chips.push({ label: `Source: ${filterSource}`, onRemove: () => {
+        filterSource = "";
+        page = 0;
+        refreshAll();
+      } });
+    for (const t of filterTech)
+      chips.push({ label: `Tech: ${t}`, onRemove: () => {
+        filterTech.delete(t);
+        page = 0;
+        refreshAll();
+      } });
+    for (const v of filterKmdf)
+      chips.push({ label: `KMDF: ${v}`, onRemove: () => {
+        filterKmdf.delete(v);
+        page = 0;
+        refreshAll();
+      } });
+    for (const v of filterUmdf)
+      chips.push({ label: `UMDF: ${v}`, onRemove: () => {
+        filterUmdf.delete(v);
+        page = 0;
+        refreshAll();
+      } });
     renderFilterChips(activeFiltersEl, chips);
   }
   rebuildChips();
@@ -2139,10 +2487,64 @@ function renderFunctionsList(container, query = {}) {
     refreshAll();
   });
   controls.appendChild(dllDropdown.element);
+  const sourceSel = el("select", { className: "filter-select" });
+  for (const [val, label] of [["", "Any source"], ["sdk", "Source: SDK"], ["driver", "Source: Driver"]]) {
+    const opt = el("option", { value: val }, label);
+    if (val === filterSource)
+      opt.selected = true;
+    sourceSel.appendChild(opt);
+  }
+  sourceSel.addEventListener("change", () => {
+    filterSource = sourceSel.value;
+    page = 0;
+    rebuildChips();
+    renderList();
+    syncUrl();
+  });
+  controls.appendChild(sourceSel);
+  let irqlInput;
+  if (isKernel) {
+    irqlInput = el("input", {
+      type: "text",
+      placeholder: "IRQL: PASSIVE, <= DISPATCH, ...",
+      className: "filter-input irql-filter"
+    });
+    irqlInput.value = filterIrql;
+    irqlInput.addEventListener("input", () => {
+      filterIrql = irqlInput.value.trim();
+      page = 0;
+      rebuildChips();
+      renderList();
+      syncUrl();
+    });
+    controls.appendChild(irqlInput);
+    const allTechs = [...new Set(getFunctions().map((f) => f.driver?.tech_root).filter((v) => !!v))].sort();
+    techDropdown = buildFilterDropdown("Filter by Tech", allTechs, filterTech, () => {
+      page = 0;
+      refreshAll();
+    });
+    controls.appendChild(techDropdown.element);
+    const allKmdfVers = [...new Set(getFunctions().map((f) => f.driver?.kmdf_ver).filter((v) => !!v))].sort();
+    if (allKmdfVers.length > 0) {
+      kmdfDropdown = buildFilterDropdown("KMDF version", allKmdfVers, filterKmdf, () => {
+        page = 0;
+        refreshAll();
+      });
+      controls.appendChild(kmdfDropdown.element);
+    }
+    const allUmdfVers = [...new Set(getFunctions().map((f) => f.driver?.umdf_ver).filter((v) => !!v))].sort();
+    if (allUmdfVers.length > 0) {
+      umdfDropdown = buildFilterDropdown("UMDF version", allUmdfVers, filterUmdf, () => {
+        page = 0;
+        refreshAll();
+      });
+      controls.appendChild(umdfDropdown.element);
+    }
+  }
   pg.appendChild(controls);
   const initSort = query.sort ?? "name";
   const initSortDir = query.sortDir ?? "asc";
-  const sort = buildSortRow([["name", "Name"], ["params", "Params"]], { sortBy: initSort, sortDir: initSortDir }, () => {
+  const sort = buildSortRow([["name", "Name"], ["params", "Params"], ["stack", "Stack"], ["maxStack", "Max stack"]], { sortBy: initSort, sortDir: initSortDir }, () => {
     page = 0;
     renderList();
     syncUrl();
@@ -2176,9 +2578,22 @@ function renderFunctionsList(container, query = {}) {
     if (filterPointerDepth >= 0)
       funcs = funcs.filter((f) => f.params.some((p) => (p.pointer_depth ?? 0) === filterPointerDepth));
     if (filterMinClient)
-      funcs = funcs.filter((f) => f.metadata?.min_client?.replace(/\u00a0/g, " ").includes(filterMinClient));
+      funcs = funcs.filter((f) => f.metadata?.min_client?.replace(/ /g, " ").includes(filterMinClient));
     if (filterMinServer)
-      funcs = funcs.filter((f) => f.metadata?.min_server?.replace(/\u00a0/g, " ").includes(filterMinServer));
+      funcs = funcs.filter((f) => f.metadata?.min_server?.replace(/ /g, " ").includes(filterMinServer));
+    if (filterSource)
+      funcs = funcs.filter((f) => f.metadata?.source === filterSource);
+    if (filterIrql) {
+      const expr = parseIrqlExpr(filterIrql);
+      if (expr)
+        funcs = funcs.filter((f) => irqlMatches(expr, f.driver?.irql));
+    }
+    if (filterTech.size > 0)
+      funcs = funcs.filter((f) => f.driver?.tech_root ? filterTech.has(f.driver.tech_root) : false);
+    if (filterKmdf.size > 0)
+      funcs = funcs.filter((f) => f.driver?.kmdf_ver ? filterKmdf.has(f.driver.kmdf_ver) : false);
+    if (filterUmdf.size > 0)
+      funcs = funcs.filter((f) => f.driver?.umdf_ver ? filterUmdf.has(f.driver.umdf_ver) : false);
     const { sortBy, sortDir } = sort.getState();
     funcs = [...funcs].sort((a, b) => {
       let cmp = 0;
@@ -2186,6 +2601,10 @@ function renderFunctionsList(container, query = {}) {
         cmp = a.name.localeCompare(b.name);
       else if (sortBy === "params")
         cmp = a.params.length - b.params.length;
+      else if (sortBy === "stack")
+        cmp = stackBytes(a) - stackBytes(b);
+      else if (sortBy === "maxStack")
+        cmp = maxStackParam(a) - maxStackParam(b);
       return sortDir === "asc" ? cmp : -cmp;
     });
     return funcs;
@@ -2211,6 +2630,12 @@ function renderFunctionsList(container, query = {}) {
         info.appendChild(badge("dll", "tag-exported"));
       if (fn.metadata?.dll)
         info.appendChild(badge(cleanDll(fn.metadata.dll).split(".")[0], "tag-dll"));
+      if (isKernel && fn.driver?.irql) {
+        info.appendChild(badge(formatIrql(fn.driver.irql), `tag-irql ${irqlSeverityClass(fn.driver.irql)}`));
+      }
+      if (isKernel && fn.driver?.tech_root && fn.driver.tech_root !== "kernel") {
+        info.appendChild(badge(fn.driver.tech_root, "tag-tech"));
+      }
       info.appendChild(headerLink(fn.location.file ?? "", "functions"));
       header.appendChild(info);
       row.appendChild(header);
@@ -2267,65 +2692,196 @@ var FIELD_COLORS = [
   "#6cb6ff",
   "#8b949e"
 ];
-function renderFieldTable(fields, parentName, visited = new Set) {
+var recordKind = (td) => td.kind ?? "struct";
+function renderFieldTable(fields, opts) {
   const table = el("table", { className: "data-table field-table" });
-  table.appendChild(el("thead", {}, el("tr", {}, el("th", {}, "Offset"), el("th", {}, "Bits"), el("th", {}, "Name"), el("th", {}, "Type"), el("th", {}, "Size"), el("th", {}, "Align"), el("th", {}, "Pad"))));
+  table.appendChild(el("thead", {}, el("tr", {}, el("th", {}, "Offset"), el("th", {}, "Bits"), el("th", {}, "Name"), el("th", {}, "Type"), el("th", {}, "Size"), el("th", {}, "Align"))));
   const tbody = el("tbody", {});
+  appendFieldRows(tbody, fields, opts);
+  table.appendChild(tbody);
+  return table;
+}
+function appendFieldRows(tbody, fields, opts) {
+  const { parentKind, baseOffset, visited } = opts;
   let prevEnd = 0;
   for (const f of fields) {
-    const padding = f.offset - prevEnd;
-    if (padding > 0) {
-      const padRow = el("tr", { className: "padding-row" });
-      padRow.appendChild(el("td", { className: "mono dim" }, `0x${prevEnd.toString(16).toUpperCase()}`));
+    if (parentKind === "struct" && f.offset > prevEnd) {
+      const padding = f.offset - prevEnd;
+      const padRow = el("tr", { className: "padding-row anon-child" });
+      padRow.appendChild(el("td", { className: "mono dim" }, `0x${(baseOffset + prevEnd).toString(16).toUpperCase()}`));
       padRow.appendChild(el("td", {}));
-      padRow.appendChild(el("td", { className: "dim" }, `[padding]`));
+      padRow.appendChild(el("td", { className: "dim" }, "[padding]"));
       padRow.appendChild(el("td", {}));
       padRow.appendChild(el("td", { className: "mono dim" }, `${padding}`));
       padRow.appendChild(el("td", {}));
-      padRow.appendChild(el("td", { className: "mono padding-size" }, `${padding}B`));
       tbody.appendChild(padRow);
     }
-    const tr = el("tr", {});
-    tr.appendChild(el("td", { className: "mono offset-col" }, `0x${f.offset.toString(16).toUpperCase()}`));
-    tr.appendChild(el("td", { className: "mono dim" }, f.offset_bits % 8 !== 0 ? `+${f.offset_bits % 8}b` : ""));
-    tr.appendChild(el("td", { className: "mono bold field-name-col" }, f.name));
-    const typeTd = el("td", { className: "mono" });
-    typeTd.appendChild(renderTypeStr(f.type ?? "(anonymous)", f.underlying_type));
-    tr.appendChild(typeTd);
-    tr.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
-    tr.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
-    tr.appendChild(el("td", {}));
-    tbody.appendChild(tr);
-    prevEnd = f.offset + f.size;
-    const ut = f.underlying_type;
-    if (ut && ut !== parentName && !visited.has(ut)) {
-      const nested = findType(ut);
-      if (nested && nested.fields.length > 0) {
-        const expRow = el("tr", { className: "nested-expansion-row" });
-        const td = el("td", {});
-        td.setAttribute("colspan", "7");
-        const toggle = el("div", { className: "nested-toggle" });
+    const absoluteOffset = baseOffset + f.offset;
+    if (f.is_anonymous && f.anon_ref) {
+      const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      if (anon) {
+        const anonKind = recordKind(anon);
+        const groupId = `anon-${anon.enclosing_record ?? "?"}-${(anon.field_path ?? []).join("-")}-${Math.random().toString(36).slice(2, 7)}`;
+        const headerRow = el("tr", { className: "anon-row anon-header", "data-anon-id": groupId });
         const arrow = el("span", { className: "collapse-arrow" }, "▶");
-        toggle.appendChild(arrow);
-        toggle.appendChild(typeLink(ut));
-        toggle.appendChild(el("span", { className: "dim" }, ` (${nested.size ?? "?"}B, ${nested.fields.length} fields)`));
-        const childVisited = new Set(visited);
-        childVisited.add(ut);
-        const nestedBody = el("div", { className: "nested-body collapsed" });
-        nestedBody.appendChild(renderFieldTable(nested.fields, ut, childVisited));
-        toggle.addEventListener("click", () => {
-          nestedBody.classList.toggle("collapsed");
-          arrow.textContent = nestedBody.classList.contains("collapsed") ? "▶" : "▼";
+        headerRow.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
+        headerRow.appendChild(el("td", {}));
+        const nameTd = el("td", { className: "dim italic anon-toggle-cell" });
+        nameTd.appendChild(arrow);
+        nameTd.appendChild(document.createTextNode(" anon"));
+        headerRow.appendChild(nameTd);
+        const typeTd = el("td", { className: "mono italic dim" });
+        typeTd.appendChild(document.createTextNode(`(anonymous ${anonKind}, ${anon.fields.length} fields)`));
+        headerRow.appendChild(typeTd);
+        headerRow.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
+        headerRow.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
+        headerRow.style.cursor = "pointer";
+        tbody.appendChild(headerRow);
+        const childRows = [];
+        const childrenTbody = tbody;
+        const startLength = childrenTbody.childNodes.length;
+        appendFieldRows(childrenTbody, anon.fields, {
+          parentName: opts.parentName,
+          parentKind: anonKind,
+          baseOffset: absoluteOffset,
+          visited
         });
-        td.appendChild(toggle);
-        td.appendChild(nestedBody);
-        expRow.appendChild(td);
-        tbody.appendChild(expRow);
+        for (let i = startLength;i < childrenTbody.childNodes.length; i++) {
+          const child = childrenTbody.childNodes[i];
+          if (child.classList)
+            child.classList.add("anon-child", `anon-child-${groupId}`);
+          childRows.push(child);
+        }
+        for (const r of childRows)
+          r.style.display = "none";
+        headerRow.addEventListener("click", () => {
+          const collapsed = childRows[0]?.style.display === "none";
+          for (const r of childRows)
+            r.style.display = collapsed ? "" : "none";
+          arrow.textContent = collapsed ? "▼" : "▶";
+        });
+      } else {
+        const errRow = el("tr", { className: "anon-row" });
+        errRow.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
+        errRow.appendChild(el("td", {}));
+        errRow.appendChild(el("td", { className: "dim italic" }, "anonymous (unresolved)"));
+        errRow.appendChild(el("td", {}));
+        errRow.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
+        errRow.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
+        tbody.appendChild(errRow);
+      }
+    } else {
+      const tr = el("tr", {});
+      tr.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
+      tr.appendChild(el("td", { className: "mono dim" }, f.offset_bits % 8 !== 0 ? `+${f.offset_bits % 8}b` : ""));
+      tr.appendChild(el("td", { className: "mono bold field-name-col" }, f.name));
+      const typeTd = el("td", { className: "mono" });
+      typeTd.appendChild(renderTypeStr(f.type, f.underlying_type ?? f.underlying_record));
+      tr.appendChild(typeTd);
+      tr.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
+      tr.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
+      tbody.appendChild(tr);
+      const recordName = f.underlying_record;
+      if (recordName && recordName !== opts.parentName && !visited.has(recordName)) {
+        const nested = findType(recordName);
+        if (nested && nested.fields.length > 0) {
+          const expRow = el("tr", { className: "nested-expansion-row" });
+          const td = el("td", {});
+          td.setAttribute("colspan", "6");
+          const toggle = el("div", { className: "nested-toggle" });
+          const arrow = el("span", { className: "collapse-arrow" }, "▶");
+          toggle.appendChild(arrow);
+          toggle.appendChild(typeLink(recordName));
+          toggle.appendChild(el("span", { className: "dim" }, ` (${nested.size ?? "?"}B, ${nested.fields.length} fields, ${recordKind(nested)})`));
+          const childVisited = new Set(visited);
+          childVisited.add(recordName);
+          const nestedBody = el("div", { className: "nested-body collapsed" });
+          nestedBody.appendChild(renderFieldTable(nested.fields, {
+            parentName: recordName,
+            parentKind: recordKind(nested),
+            baseOffset: 0,
+            visited: childVisited
+          }));
+          toggle.addEventListener("click", () => {
+            nestedBody.classList.toggle("collapsed");
+            arrow.textContent = nestedBody.classList.contains("collapsed") ? "▶" : "▼";
+          });
+          td.appendChild(toggle);
+          td.appendChild(nestedBody);
+          expRow.appendChild(td);
+          tbody.appendChild(expRow);
+        }
+      }
+    }
+    if (parentKind === "union") {
+      prevEnd = Math.max(prevEnd, f.offset + f.size);
+    } else {
+      prevEnd = f.offset + f.size;
+    }
+  }
+}
+function fmtAbsOffset(n) {
+  return `0x${n.toString(16).toUpperCase().padStart(4, "0")}`;
+}
+function emitRecord(td, indent, asMember, baseOffset = 0, depth = 0) {
+  const lines = [];
+  const keyword = recordKind(td) === "union" ? "union" : "struct";
+  if (asMember) {
+    lines.push(`${indent}${keyword} {`);
+  } else {
+    lines.push(`typedef ${keyword} ${td.name} {`);
+  }
+  const inner = indent + "    ";
+  for (const f of td.fields) {
+    const absOffset = baseOffset + f.offset;
+    if (f.is_anonymous && f.anon_ref) {
+      const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      if (anon) {
+        for (const ln of emitRecord(anon, inner, true, absOffset, depth + 1))
+          lines.push(ln);
+      } else {
+        lines.push(`${inner}/* unresolved anonymous ${f.anon_ref.kind} */`);
+      }
+    } else {
+      let typeStr = f.type ?? "?";
+      let nameStr = f.name;
+      if (f.is_array && f.array_size != null) {
+        typeStr = typeStr.replace(/\[\d+\]$/, "");
+        nameStr = `${f.name}[${f.array_size}]`;
+      }
+      const offComment = depth === 0 ? fmtAbsOffset(absOffset) : `${fmtAbsOffset(absOffset)} | ${fmtAbsOffset(f.offset)}`;
+      lines.push(`${inner}/* ${offComment} */  ${typeStr} ${nameStr};  /* size: ${f.size}, align: ${f.alignment} */`);
+    }
+  }
+  if (asMember) {
+    let suffix = `${indent}};`;
+    if (td.size != null)
+      suffix += `  /* size: ${td.size}, align: ${maxAlign(td)} */`;
+    lines.push(suffix);
+  } else {
+    const nameTrim = td.name.startsWith("_") ? td.name.slice(1) : td.name;
+    let suffix = `} ${nameTrim}, *P${nameTrim};`;
+    if (td.size != null)
+      suffix += `  /* total size: 0x${td.size.toString(16).toUpperCase()} (${td.size}) */`;
+    lines.push(`${indent}${suffix}`);
+  }
+  return lines;
+}
+function maxAlign(td) {
+  let m = 1;
+  for (const f of td.fields) {
+    if (f.alignment > m)
+      m = f.alignment;
+    if (f.is_anonymous && f.anon_ref) {
+      const a = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      if (a) {
+        const am = maxAlign(a);
+        if (am > m)
+          m = am;
       }
     }
   }
-  table.appendChild(tbody);
-  return table;
+  return m;
 }
 function renderMemoryLayout(td) {
   const content = el("div", {});
@@ -2333,9 +2889,10 @@ function renderMemoryLayout(td) {
     content.appendChild(el("p", { className: "dim" }, "No layout information available."));
     return content;
   }
+  const kind = recordKind(td);
   const totalBytes = td.size;
   const gridContainer = el("div", { className: "layout-grid-container" });
-  const visual = el("div", { className: "layout-visual" });
+  const visual = el("div", { className: `layout-visual layout-${kind}` });
   const scaleBar = el("div", { className: "layout-scale" });
   const markerCount = Math.min(8, totalBytes);
   const step = Math.ceil(totalBytes / markerCount);
@@ -2346,7 +2903,7 @@ function renderMemoryLayout(td) {
   visual.appendChild(scaleBar);
   let prevEnd = 0;
   td.fields.forEach((f, i) => {
-    if (f.offset > prevEnd) {
+    if (kind === "struct" && f.offset > prevEnd) {
       const padBar = el("div", {
         className: "layout-bar-item layout-padding",
         style: `left:${prevEnd / totalBytes * 100}%;width:${Math.max((f.offset - prevEnd) / totalBytes * 100, 0.5)}%`
@@ -2355,15 +2912,16 @@ function renderMemoryLayout(td) {
       visual.appendChild(padBar);
     }
     const color = FIELD_COLORS[i % FIELD_COLORS.length];
+    const isAnon = f.is_anonymous;
     const bar = el("div", {
-      className: "layout-bar-item",
+      className: `layout-bar-item${isAnon ? " layout-anon" : ""}`,
       style: `left:${f.offset / totalBytes * 100}%;width:${Math.max(f.size / totalBytes * 100, 0.5)}%;background:${color}`
     });
-    bar.title = `${f.name}: ${f.type ?? "?"} (${f.size}B at 0x${f.offset.toString(16).toUpperCase()})`;
+    bar.title = `${f.name}: ${f.type ?? "(anonymous)"} (${f.size}B at 0x${f.offset.toString(16).toUpperCase()})`;
     visual.appendChild(bar);
-    prevEnd = f.offset + f.size;
+    prevEnd = kind === "union" ? Math.max(prevEnd, f.offset + f.size) : f.offset + f.size;
   });
-  if (prevEnd < totalBytes) {
+  if (kind === "struct" && prevEnd < totalBytes) {
     const padBar = el("div", {
       className: "layout-bar-item layout-padding",
       style: `left:${prevEnd / totalBytes * 100}%;width:${Math.max((totalBytes - prevEnd) / totalBytes * 100, 0.5)}%`
@@ -2381,17 +2939,23 @@ function renderMemoryLayout(td) {
     item.appendChild(el("span", { className: "legend-info dim" }, `${f.size}B @ 0x${f.offset.toString(16).toUpperCase()}`));
     legend.appendChild(item);
   });
-  let totalPadding = 0, pEnd = 0;
-  for (const f of td.fields) {
-    if (f.offset > pEnd)
-      totalPadding += f.offset - pEnd;
-    pEnd = f.offset + f.size;
+  let totalPadding = 0;
+  if (kind === "struct") {
+    let pEnd = 0;
+    for (const f of td.fields) {
+      if (f.offset > pEnd)
+        totalPadding += f.offset - pEnd;
+      pEnd = f.offset + f.size;
+    }
+    if (pEnd < totalBytes)
+      totalPadding += totalBytes - pEnd;
   }
-  if (pEnd < totalBytes)
-    totalPadding += totalBytes - pEnd;
   if (totalPadding > 0) {
     const item = el("div", { className: "legend-item" });
-    item.appendChild(el("span", { className: "legend-swatch", style: "background:repeating-linear-gradient(45deg,#30363d,#30363d 2px,transparent 2px,transparent 4px)" }));
+    item.appendChild(el("span", {
+      className: "legend-swatch",
+      style: "background:repeating-linear-gradient(45deg,#30363d,#30363d 2px,transparent 2px,transparent 4px)"
+    }));
     item.appendChild(el("span", { className: "legend-label dim" }, "padding"));
     item.appendChild(el("span", { className: "legend-info dim" }, `${totalPadding}B (${(totalPadding / totalBytes * 100).toFixed(1)}%)`));
     legend.appendChild(item);
@@ -2400,11 +2964,19 @@ function renderMemoryLayout(td) {
   content.appendChild(gridContainer);
   const stats = el("div", { className: "type-stats" });
   const dataBytes = td.fields.reduce((s, f) => s + f.size, 0);
+  stats.appendChild(el("span", {}, `Kind: ${kind}`));
   stats.appendChild(el("span", {}, `Total: ${totalBytes}B`));
-  stats.appendChild(el("span", {}, `Data: ${dataBytes}B`));
-  stats.appendChild(el("span", {}, `Padding: ${totalPadding}B (${(totalPadding / totalBytes * 100).toFixed(1)}%)`));
+  if (kind === "struct") {
+    stats.appendChild(el("span", {}, `Data: ${dataBytes}B`));
+    stats.appendChild(el("span", {}, `Padding: ${totalPadding}B (${(totalPadding / totalBytes * 100).toFixed(1)}%)`));
+  } else {
+    const maxMember = Math.max(...td.fields.map((f) => f.size), 0);
+    stats.appendChild(el("span", {}, `Largest member: ${maxMember}B`));
+  }
   stats.appendChild(el("span", {}, `Fields: ${td.fields.length}`));
-  stats.appendChild(el("span", {}, `Max align: ${Math.max(...td.fields.map((f) => f.alignment), 1)}`));
+  if (td.fields.length > 0) {
+    stats.appendChild(el("span", {}, `Max align: ${Math.max(...td.fields.map((f) => f.alignment), 1)}`));
+  }
   content.appendChild(stats);
   return content;
 }
@@ -2414,6 +2986,7 @@ function renderTypesList(container, query = {}) {
   let filterMinSize = parseInt(query.minSize ?? "") || 0;
   let filterMaxSize = parseInt(query.maxSize ?? "") || Infinity;
   let filterHasFields = query.hasFields ?? "all";
+  let filterKind = query.kind ?? "all";
   let page = parseInt(query.page ?? "") || 0;
   let searchQuery = query.q ?? "";
   let useRegex = query.regex === "1";
@@ -2427,6 +3000,7 @@ function renderTypesList(container, query = {}) {
       minSize: filterMinSize > 0 ? String(filterMinSize) : "",
       maxSize: filterMaxSize < Infinity ? String(filterMaxSize) : "",
       hasFields: filterHasFields !== "all" ? filterHasFields : "",
+      kind: filterKind !== "all" ? filterKind : "",
       sort: s && s.sortBy !== "name" ? s.sortBy : "",
       sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
       page: page > 0 ? String(page) : ""
@@ -2455,7 +3029,8 @@ function renderTypesList(container, query = {}) {
         refreshAll();
       } });
     if (filterMinSize > 0 || filterMaxSize < Infinity) {
-      const minS = filterMinSize > 0 ? `${filterMinSize}B` : "0", maxS = filterMaxSize < Infinity ? `${filterMaxSize}B` : "∞";
+      const minS = filterMinSize > 0 ? `${filterMinSize}B` : "0";
+      const maxS = filterMaxSize < Infinity ? `${filterMaxSize}B` : "∞";
       chips.push({ label: `Size: ${minS}–${maxS}`, onRemove: () => {
         filterMinSize = 0;
         filterMaxSize = Infinity;
@@ -2465,6 +3040,13 @@ function renderTypesList(container, query = {}) {
         refreshAll();
       } });
     }
+    if (filterKind !== "all")
+      chips.push({ label: `Kind: ${filterKind}`, onRemove: () => {
+        filterKind = "all";
+        kindSel.value = "all";
+        page = 0;
+        refreshAll();
+      } });
     renderFilterChips(activeFiltersEl, chips);
   }
   rebuildChips();
@@ -2518,6 +3100,21 @@ function renderTypesList(container, query = {}) {
     syncUrl();
   });
   controls.appendChild(fieldsSel);
+  const kindSel = el("select", { className: "filter-select" });
+  for (const [v, l] of [["all", "Struct + Union"], ["struct", "Struct only"], ["union", "Union only"]]) {
+    const opt = el("option", { value: v }, l);
+    if (v === filterKind)
+      opt.selected = true;
+    kindSel.appendChild(opt);
+  }
+  kindSel.addEventListener("change", () => {
+    filterKind = kindSel.value;
+    page = 0;
+    rebuildChips();
+    renderList();
+    syncUrl();
+  });
+  controls.appendChild(kindSel);
   pg.appendChild(controls);
   const initSort = query.sort ?? "name";
   const initSortDir = query.sortDir ?? "asc";
@@ -2536,8 +3133,9 @@ function renderTypesList(container, query = {}) {
   container.appendChild(pg);
   function getFiltered() {
     let types = getTypes();
-    if (searchQuery)
-      types = types.filter((t) => matchQuery(t.name, searchQuery, useRegex) || t.fields.some((f) => matchQuery(f.name, searchQuery, useRegex)));
+    if (searchQuery) {
+      types = types.filter((t) => matchQuery(t.name, searchQuery, useRegex) || (t.aliases?.some((a) => matchQuery(a, searchQuery, useRegex)) ?? false) || t.fields.some((f) => matchQuery(f.name, searchQuery, useRegex)));
+    }
     if (filterHeaders.size > 0)
       types = types.filter((t) => t.location.file !== null && filterHeaders.has(t.location.file));
     if (filterMinSize > 0)
@@ -2548,6 +3146,10 @@ function renderTypesList(container, query = {}) {
       types = types.filter((t) => t.fields.length > 0);
     else if (filterHasFields === "no")
       types = types.filter((t) => t.fields.length === 0);
+    if (filterKind === "struct")
+      types = types.filter((t) => recordKind(t) === "struct");
+    else if (filterKind === "union")
+      types = types.filter((t) => recordKind(t) === "union");
     const { sortBy, sortDir } = sort.getState();
     types = [...types].sort((a, b) => {
       let cmp = 0;
@@ -2574,6 +3176,7 @@ function renderTypesList(container, query = {}) {
       const header = el("div", { className: "item-header" });
       header.appendChild(el("a", { className: "item-name", href: buildHash(`/types/${encodeURIComponent(td.name)}`) }, td.name));
       const info = el("span", { className: "item-info" });
+      info.appendChild(badge(recordKind(td), recordKind(td) === "union" ? "tag-union" : "tag-struct"));
       if (td.size !== null)
         info.appendChild(badge(`${td.size}B`, "tag-size"));
       else
@@ -2611,20 +3214,28 @@ function renderTypeDetail(container, name) {
     navigate(`/types?q=${encodeURIComponent(name)}`);
     return;
   }
-  const result = flexFindType(name);
-  if (!result) {
+  const resolved = resolveTypeOrTypedef(name);
+  if (!resolved) {
     renderNotFound(container, "Type", name, buildHash("/types"), "All types", findSimilarNames(name));
     return;
   }
-  if (result.canonical !== name) {
-    navigate("/types/" + encodeURIComponent(result.canonical));
-    return;
+  if (resolved.kind === "type") {
+    if (resolved.canonical !== name) {
+      navigate("/types/" + encodeURIComponent(resolved.canonical));
+      return;
+    }
+    renderRecordDetail(container, resolved.type);
+  } else {
+    renderTypedefDetail(container, resolved.typedef);
   }
-  const td = result.item;
+}
+function renderRecordDetail(container, td) {
+  const kind = recordKind(td);
   const pg = el("div", { className: "detail-view" });
   pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "← All types"));
   pg.appendChild(el("h2", { className: "mono" }, td.name));
   const tags = el("div", { className: "tag-row" });
+  tags.appendChild(badge(kind, kind === "union" ? "tag-union" : "tag-struct"));
   if (td.size !== null)
     tags.appendChild(badge(`${td.size} bytes`, "tag-size"));
   else
@@ -2635,36 +3246,112 @@ function renderTypeDetail(container, name) {
   locTag.appendChild(document.createTextNode(`:${td.location.line}`));
   tags.appendChild(locTag);
   pg.appendChild(tags);
+  if (td.aliases && td.aliases.length > 0) {
+    const aliasRow = el("div", { className: "tag-row alias-row" });
+    aliasRow.appendChild(el("span", { className: "dim" }, "aka:"));
+    for (const a of td.aliases) {
+      aliasRow.appendChild(typeLink(a));
+    }
+    pg.appendChild(aliasRow);
+  }
   if (td.fields.length > 0) {
     const proto = el("pre", { className: "c-prototype" });
-    let code = `typedef struct ${td.name} {
-`;
-    for (const f of td.fields) {
-      const offset = `0x${f.offset.toString(16).toUpperCase().padStart(4, "0")}`;
-      let typeStr = f.type ?? "?";
-      let nameStr = f.name;
-      if (f.is_array && f.array_size != null) {
-        typeStr = typeStr.replace(/\[\d+\]$/, "");
-        nameStr = `${f.name}[${f.array_size}]`;
-      }
-      code += `  /* ${offset} */  ${typeStr} ${nameStr};  /* size: ${f.size}, align: ${f.alignment} */
-`;
-    }
-    code += `} ${td.name.startsWith("_") ? td.name.slice(1) : td.name}, *P${td.name.startsWith("_") ? td.name.slice(1) : td.name};`;
-    if (td.size)
-      code += `  /* total size: 0x${td.size.toString(16).toUpperCase()} (${td.size}) */`;
-    proto.textContent = code;
+    proto.textContent = emitRecord(td, "", false).join(`
+`);
     pg.appendChild(collapsibleSection("C Definition", proto));
     requestAnimationFrame(() => highlightCode(proto));
   }
   pg.appendChild(collapsibleSection("Memory Layout", renderMemoryLayout(td)));
   if (td.fields.length > 0) {
-    pg.appendChild(collapsibleSection("Fields", renderFieldTable(td.fields, td.name, new Set([td.name]))));
+    pg.appendChild(collapsibleSection("Fields", renderFieldTable(td.fields, {
+      parentName: td.name,
+      parentKind: kind,
+      baseOffset: 0,
+      visited: new Set([td.name])
+    })));
   } else {
     pg.appendChild(el("p", { className: "dim" }, "This type has no visible fields (opaque/forward declaration)."));
   }
+  appendXRefs(pg, td.name);
+  if (td.aliases) {
+    for (const a of td.aliases)
+      appendXRefs(pg, a, ` via ${a}`);
+  }
+  container.appendChild(pg);
+}
+function renderTypedefDetail(container, t) {
+  const pg = el("div", { className: "detail-view" });
+  pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "← All types"));
+  pg.appendChild(el("h2", { className: "mono" }, t.name));
+  const tags = el("div", { className: "tag-row" });
+  tags.appendChild(badge("typedef", "tag-typedef"));
+  tags.appendChild(badge(`kind: ${t.kind}`, `tag-typedef-${t.kind}`));
+  if (t.is_pointer)
+    tags.appendChild(badge(`pointer depth ${t.pointer_depth}`, "tag-ptr"));
+  if (t.is_array)
+    tags.appendChild(badge("array", "tag-arr"));
+  if (t.is_function_pointer)
+    tags.appendChild(badge("function pointer", "tag-fnptr"));
+  if (t.is_const)
+    tags.appendChild(badge("const", "tag-const"));
+  const locTag = el("span", { className: "badge tag-loc" });
+  locTag.appendChild(headerLink(t.location.file ?? "?", "types"));
+  if (t.location.line)
+    locTag.appendChild(document.createTextNode(`:${t.location.line}`));
+  tags.appendChild(locTag);
+  pg.appendChild(tags);
+  const chainContainer = el("div", { className: "typedef-chain" });
+  chainContainer.appendChild(el("span", { className: "mono bold" }, t.name));
+  chainContainer.appendChild(document.createTextNode(" → "));
+  const chainSteps = t.chain.length > 0 ? t.chain : [t.canonical];
+  chainSteps.forEach((step, i) => {
+    if (i > 0)
+      chainContainer.appendChild(document.createTextNode(" → "));
+    chainContainer.appendChild(renderTypeStr(step));
+  });
+  pg.appendChild(collapsibleSection("Typedef chain", chainContainer));
+  const cdef = el("pre", { className: "c-prototype" });
+  cdef.textContent = `typedef ${t.canonical} ${t.name};`;
+  pg.appendChild(collapsibleSection("C Definition", cdef));
+  requestAnimationFrame(() => highlightCode(cdef));
+  if (t.underlying_record) {
+    const underlyingRecord = findType(t.underlying_record);
+    const underlyingEnum = !underlyingRecord ? findEnum(t.underlying_record) : undefined;
+    if (underlyingRecord) {
+      const linkPara = el("div", { className: "typedef-underlying" });
+      linkPara.appendChild(el("strong", {}, "Underlying record: "));
+      linkPara.appendChild(typeLink(t.underlying_record));
+      linkPara.appendChild(el("span", { className: "dim" }, ` (${recordKind(underlyingRecord)}, ${underlyingRecord.size ?? "?"}B, ${underlyingRecord.fields.length} fields)`));
+      pg.appendChild(linkPara);
+      if (underlyingRecord.fields.length > 0) {
+        pg.appendChild(collapsibleSection(`Underlying — ${underlyingRecord.name}`, renderFieldTable(underlyingRecord.fields, {
+          parentName: underlyingRecord.name,
+          parentKind: recordKind(underlyingRecord),
+          baseOffset: 0,
+          visited: new Set([underlyingRecord.name])
+        })));
+      }
+    } else if (underlyingEnum) {
+      const linkPara = el("div", { className: "typedef-underlying" });
+      linkPara.appendChild(el("strong", {}, "Underlying enum: "));
+      linkPara.appendChild(enumLink(underlyingEnum.name));
+      linkPara.appendChild(el("span", { className: "dim" }, ` (${underlyingEnum.constants.length} variants${underlyingEnum.type ? `, ${underlyingEnum.type}` : ""})`));
+      pg.appendChild(linkPara);
+    } else {
+      pg.appendChild(el("div", { className: "typedef-underlying" }, el("strong", {}, "Underlying record: "), document.createTextNode(`${t.underlying_record} (not in current dataset)`)));
+    }
+  } else if (t.underlying_type) {
+    const linkPara = el("div", { className: "typedef-underlying" });
+    linkPara.appendChild(el("strong", {}, "Terminal primitive: "));
+    linkPara.appendChild(el("code", { className: "mono" }, t.underlying_type));
+    pg.appendChild(linkPara);
+  }
+  appendXRefs(pg, t.name);
+  container.appendChild(pg);
+}
+function appendXRefs(pg, name, titleSuffix = "") {
   const xrefData = getXRef();
-  function renderFuncXref(title, fnSet) {
+  const renderFuncXref = (title, fnSet) => {
     if (!fnSet || fnSet.size === 0)
       return;
     const list = el("div", { className: "xref-list" });
@@ -2684,18 +3371,17 @@ function renderTypeDetail(container, name) {
       }
     };
     render();
-    pg.appendChild(collapsibleSection(`${title} (${fnSet.size})`, list));
-  }
-  renderFuncXref("Functions that take this type", xrefData.typeToFuncParams.get(td.name));
-  renderFuncXref("Functions that return this type", xrefData.typeToFuncReturns.get(td.name));
-  const parentTypes = xrefData.typeToParentTypes.get(td.name);
+    pg.appendChild(collapsibleSection(`${title}${titleSuffix} (${fnSet.size})`, list));
+  };
+  renderFuncXref("Functions that take this type", xrefData.nameToFuncParams.get(name));
+  renderFuncXref("Functions that return this type", xrefData.nameToFuncReturns.get(name));
+  const parentTypes = xrefData.nameToParentTypes.get(name);
   if (parentTypes && parentTypes.size > 0) {
     const list = el("div", { className: "xref-list" });
     for (const pt of [...parentTypes].sort())
       list.appendChild(el("span", { className: "xref-chip" }, typeLink(pt)));
-    pg.appendChild(collapsibleSection(`Types containing this type (${parentTypes.size})`, list));
+    pg.appendChild(collapsibleSection(`Types containing this type${titleSuffix} (${parentTypes.size})`, list));
   }
-  container.appendChild(pg);
 }
 
 // src/views/type-graph.ts
@@ -2704,10 +3390,12 @@ var cachedKey = "";
 async function loadGraphData() {
   const ds = getCurrentDataset();
   const arch = getCurrentArch();
-  const key = `${ds}/${arch}`;
+  const mode = getCurrentMode();
+  const suffix = mode === "kernel" ? "-kernel" : "";
+  const key = `${ds}${suffix}/${arch}`;
   if (cachedGraph && cachedKey === key)
     return cachedGraph;
-  const resp = await fetch(`data/${ds}/${arch}/graph.json`);
+  const resp = await fetch(`data/${ds}${suffix}/${arch}/graph.json`);
   if (!resp.ok)
     throw new Error("graph.json not found");
   cachedGraph = await resp.json();
@@ -3426,9 +4114,11 @@ function renderLookup(container, name) {
   const fn = findFunc(name);
   if (fn)
     matches.push({ kind: "function", name: fn.name });
-  const typeResult = flexFindType(name);
-  if (typeResult)
-    matches.push({ kind: "type", name: typeResult.canonical });
+  const typeResult = resolveTypeOrTypedef(name);
+  if (typeResult) {
+    const canonicalName = typeResult.kind === "type" ? typeResult.canonical : typeResult.typedef.name;
+    matches.push({ kind: typeResult.kind === "typedef" ? "typedef" : "type", name: canonicalName });
+  }
   const c = findConst(name);
   if (c)
     matches.push({ kind: "constant", name: c.name });
@@ -3442,6 +4132,7 @@ function renderLookup(container, name) {
         navigate(`/functions/${encodeURIComponent(m.name)}`);
         return;
       case "type":
+      case "typedef":
         navigate(`/types/${encodeURIComponent(m.name)}`);
         return;
       case "constant":
@@ -3458,7 +4149,7 @@ function renderLookup(container, name) {
     pg.appendChild(el("p", { className: "dim" }, "This identifier exists in multiple categories:"));
     const list = el("div", { className: "suggestions" });
     for (const m of matches) {
-      const href = m.kind === "function" ? buildHash(`/functions/${encodeURIComponent(m.name)}`) : m.kind === "type" ? buildHash(`/types/${encodeURIComponent(m.name)}`) : m.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(m.name)}`) : buildHash(`/constants/${encodeURIComponent(m.name)}`);
+      const href = m.kind === "function" ? buildHash(`/functions/${encodeURIComponent(m.name)}`) : m.kind === "type" || m.kind === "typedef" ? buildHash(`/types/${encodeURIComponent(m.name)}`) : m.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(m.name)}`) : buildHash(`/constants/${encodeURIComponent(m.name)}`);
       const chip = el("span", { className: "suggestion-chip" }, el("a", { href, className: "xref" }, m.name));
       chip.appendChild(el("span", { className: "dim" }, ` (${m.kind})`));
       list.appendChild(chip);
@@ -3473,7 +4164,7 @@ function renderLookup(container, name) {
     pg.appendChild(el("h2", {}, `Search results for "${name}"`));
     const list = el("div", { className: "lookup-results" });
     for (const r of results) {
-      const href = r.kind === "function" ? buildHash(`/functions/${encodeURIComponent(r.name)}`) : r.kind === "type" ? buildHash(`/types/${encodeURIComponent(r.name)}`) : r.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(r.name)}`) : buildHash(`/constants/${encodeURIComponent(r.name)}`);
+      const href = r.kind === "function" ? buildHash(`/functions/${encodeURIComponent(r.name)}`) : r.kind === "type" || r.kind === "typedef" ? buildHash(`/types/${encodeURIComponent(r.name)}`) : r.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(r.name)}`) : buildHash(`/constants/${encodeURIComponent(r.name)}`);
       const row = el("div", { className: "lookup-result-item" });
       row.appendChild(badge(r.kind, `search-badge-${r.kind === "constant" ? "const" : r.kind}`));
       row.appendChild(el("a", { href, className: "xref" }, r.name));
@@ -3508,8 +4199,9 @@ async function init() {
   const initialParams = parseInitialQuery();
   const initialDs = initialParams.ds;
   const initialArch = initialParams.arch;
+  const initialMode = initialParams.mode;
   try {
-    await loadData(initialDs || undefined, initialArch || undefined);
+    await loadData(initialDs || undefined, initialArch || undefined, initialMode || undefined);
   } catch (e) {
     $("#loading").innerHTML = `<div class="error">Failed to load data: ${e}</div>`;
     return;

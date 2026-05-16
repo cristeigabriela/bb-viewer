@@ -6,10 +6,15 @@
 #   .\generate-data.ps1 -Arch amd64             # only amd64
 #   .\generate-data.ps1 -Mode kernel            # only kernel mode
 #   .\generate-data.ps1 -Dataset winsdk -Arch x86 -Mode user
+#   .\generate-data.ps1 -BbBinDir 'D:\dev\rust\bb\bb\target\debug'  # use local build
 #
 # Requires: Windows SDK installed. Auto-detects SDK path from registry.
 # Kernel mode additionally requires the WDK (install via winget:
 #   winget install --exact --id Microsoft.WindowsWDK.10.0.26100)
+#
+# If -BbBinDir already contains bb-*.exe binaries, they are reused as-is
+# (skips the GitHub release download). Otherwise the latest released binaries
+# are downloaded into -BbBinDir.
 #
 # Known limitations:
 #   - ARM/ARM64 funcs: bb-funcs --arch arm/arm64 fails (ARM ABI not implemented in bb).
@@ -53,18 +58,30 @@ if (-not $env:WindowsSdkDir) {
     }
 }
 
-# Download latest bb tools from GitHub releases
+# Use local bb binaries if all are already present in $BbBinDir; otherwise
+# download the latest released bb tools from GitHub.
 New-Item -ItemType Directory -Path $BbBinDir -Force | Out-Null
-Write-Host "downloading latest bb tools to $BbBinDir..."
+$allPresent = $true
 foreach ($entry in $Tools) {
-    $asset = "$($entry.Tool).exe"
-    Write-Host -NoNewline "  $asset ... "
-    gh release download --repo cristeigabriela/bb --pattern $asset --dir $BbBinDir --clobber 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "failed to download $asset"
-        exit 1
+    if (-not (Test-Path (Join-Path $BbBinDir "$($entry.Tool).exe"))) {
+        $allPresent = $false
+        break
     }
-    Write-Host "ok"
+}
+if ($allPresent) {
+    Write-Host "using existing bb tools in $BbBinDir"
+} else {
+    Write-Host "downloading latest bb tools to $BbBinDir..."
+    foreach ($entry in $Tools) {
+        $asset = "$($entry.Tool).exe"
+        Write-Host -NoNewline "  $asset ... "
+        gh release download --repo cristeigabriela/bb --pattern $asset --dir $BbBinDir --clobber 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "failed to download $asset"
+            exit 1
+        }
+        Write-Host "ok"
+    }
 }
 
 $failed = 0
@@ -103,6 +120,13 @@ foreach ($m in $Modes) {
                 $args = @("--$ds", "--arch", "$a", "--json")
                 if ($m.Flag) {
                     $args += $m.Flag.Split(" ")
+                }
+                # bb-types with no --struct filter only emits typedefs targeting
+                # records (struct/union). Force '*' so we capture pointer/enum/
+                # primitive/function-pointer/array typedefs too — required for
+                # the viewer to resolve HANDLE, DWORD, FILE_INFORMATION_CLASS, etc.
+                if ($tool -eq "bb-types") {
+                    $args += @("--struct", "*")
                 }
 
                 try {

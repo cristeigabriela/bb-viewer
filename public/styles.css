@@ -615,14 +615,59 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
   transition: border-color var(--transition);
 }
 .xref-chip:hover { border-color: var(--border); }
-.xref { font-size: 0.82rem; text-decoration: none !important; }
-.xref:hover { text-decoration: underline !important; }
+.xref {
+  font-size: 0.82rem;
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.xref:hover { text-decoration-color: currentColor !important; }
 .xref-type { color: var(--accent); }
 .xref-func { color: var(--val-purple); }
 .xref-const { color: var(--val-yellow); }
 .xref-enum { color: var(--val-green); }
-.xref-header { color: var(--text-dim); font-size: 0.78rem; }
-.xref-header:hover { color: var(--accent); }
+/* Header xrefs stay subtle — text-only chrome, no underline by default. */
+.xref-header { color: var(--text-dim); font-size: 0.78rem; text-decoration: none !important; }
+.xref-header:hover { color: var(--accent); text-decoration: underline !important; }
+
+/* IRQL severity badges — green (safe) → red (dangerous), matching kernel docs convention. */
+.tag-irql {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+.tag-irql.irql-passive {
+  background: rgba(80, 200, 120, 0.15);
+  color: #7ee787;
+  border-color: rgba(80, 200, 120, 0.35);
+}
+.tag-irql.irql-apc {
+  background: rgba(200, 200, 80, 0.12);
+  color: #e3b341;
+  border-color: rgba(200, 200, 80, 0.30);
+}
+.tag-irql.irql-dispatch {
+  background: rgba(255, 165, 0, 0.14);
+  color: #ffa657;
+  border-color: rgba(255, 165, 0, 0.32);
+}
+.tag-irql.irql-high {
+  background: rgba(255, 80, 80, 0.16);
+  color: #ff7b72;
+  border-color: rgba(255, 80, 80, 0.36);
+}
+.tag-irql.irql-unknown {
+  background: var(--bg-card);
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+.tag-tech { background: var(--bg-card); color: var(--val-purple); border: 1px solid var(--border); }
+.tag-src-driver { background: var(--bg-card); color: var(--val-yellow); border: 1px solid var(--border); }
+.tag-src-sdk { background: var(--bg-card); color: var(--val-green); border: 1px solid var(--border); }
+.tag-typedef { background: var(--bg-card); color: var(--val-purple); border: 1px solid var(--border); }
+.tag-union { background: rgba(120, 120, 240, 0.18); color: #a5d6ff; border: 1px solid rgba(120, 120, 240, 0.35); }
+.tag-struct { background: var(--bg-card); color: var(--text-dim); border: 1px solid var(--border); }
 
 /* ── Memory Layout ── */
 .layout-grid-container {
@@ -766,6 +811,17 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 }
 .arch-btn:hover { color: var(--text); }
 .arch-btn.active { color: var(--val-green); background: var(--bg-card); }
+
+/* ── Mode Switcher ── */
+.mode-switcher { display: flex; gap: 1px; padding: 1px; background: var(--border-light); }
+.mode-btn {
+  padding: 3px 10px; font-size: 0.78rem; font-weight: 600;
+  background: transparent; color: var(--text-dim);
+  border: none; cursor: pointer; transition: all var(--transition);
+  font-family: var(--font); white-space: nowrap;
+}
+.mode-btn:hover { color: var(--text); }
+.mode-btn.active { color: var(--accent); background: var(--bg-card); }
 
 /* ── Filter Dropdown ── */
 .filter-dropdown { position: relative; }

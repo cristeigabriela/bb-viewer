@@ -1,4 +1,4 @@
-import { findFunc, flexFindType, findConst, findEnum, searchAll, findSimilarNames } from "../data";
+import { findFunc, resolveTypeOrTypedef, findConst, findEnum, searchAll, findSimilarNames } from "../data";
 import { navigate, buildHash } from "../router";
 import { el, clear } from "../dom";
 import { badge } from "../ui/links";
@@ -19,8 +19,11 @@ export function renderLookup(container: Element, name: string): void {
   const fn = findFunc(name);
   if (fn) matches.push({ kind: "function", name: fn.name });
 
-  const typeResult = flexFindType(name);
-  if (typeResult) matches.push({ kind: "type", name: typeResult.canonical });
+  const typeResult = resolveTypeOrTypedef(name);
+  if (typeResult) {
+    const canonicalName = typeResult.kind === "type" ? typeResult.canonical : typeResult.typedef.name;
+    matches.push({ kind: typeResult.kind === "typedef" ? "typedef" : "type", name: canonicalName });
+  }
 
   const c = findConst(name);
   if (c) matches.push({ kind: "constant", name: c.name });
@@ -33,7 +36,8 @@ export function renderLookup(container: Element, name: string): void {
     const m = matches[0];
     switch (m.kind) {
       case "function": navigate(`/functions/${encodeURIComponent(m.name)}`); return;
-      case "type": navigate(`/types/${encodeURIComponent(m.name)}`); return;
+      case "type":
+      case "typedef": navigate(`/types/${encodeURIComponent(m.name)}`); return;
       case "constant": navigate(`/constants/${encodeURIComponent(m.name)}`); return;
       case "enum": navigate(`/constants/enum/${encodeURIComponent(m.name)}`); return;
     }
@@ -47,7 +51,7 @@ export function renderLookup(container: Element, name: string): void {
     const list = el("div", { className: "suggestions" });
     for (const m of matches) {
       const href = m.kind === "function" ? buildHash(`/functions/${encodeURIComponent(m.name)}`)
-        : m.kind === "type" ? buildHash(`/types/${encodeURIComponent(m.name)}`)
+        : (m.kind === "type" || m.kind === "typedef") ? buildHash(`/types/${encodeURIComponent(m.name)}`)
         : m.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(m.name)}`)
         : buildHash(`/constants/${encodeURIComponent(m.name)}`);
       const chip = el("span", { className: "suggestion-chip" },
@@ -69,7 +73,7 @@ export function renderLookup(container: Element, name: string): void {
     const list = el("div", { className: "lookup-results" });
     for (const r of results) {
       const href = r.kind === "function" ? buildHash(`/functions/${encodeURIComponent(r.name)}`)
-        : r.kind === "type" ? buildHash(`/types/${encodeURIComponent(r.name)}`)
+        : (r.kind === "type" || r.kind === "typedef") ? buildHash(`/types/${encodeURIComponent(r.name)}`)
         : r.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(r.name)}`)
         : buildHash(`/constants/${encodeURIComponent(r.name)}`);
       const row = el("div", { className: "lookup-result-item" });
