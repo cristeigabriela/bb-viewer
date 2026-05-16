@@ -114,6 +114,35 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .error { color: var(--val-red); font-size: 1.2rem; }
 
+/* Dataset/arch/mode switch overlay — covers #content while loadData runs.
+ * The navbar stays interactive-looking; only the content body dims. */
+body.loading-data #content::before {
+  content: "";
+  position: fixed; inset: 48px 0 28px 0; /* under nav, above status bar */
+  background: var(--bg);
+  opacity: 0.7;
+  z-index: 90;
+  pointer-events: none;
+}
+body.loading-data #content::after {
+  content: "loading…";
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 91;
+  padding: 14px 22px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-family: inherit;
+  letter-spacing: 1px;
+  box-shadow: 0 0 20px var(--accent-glow);
+  animation: pulse-fade 1.2s ease-in-out infinite;
+}
+@keyframes pulse-fade {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* ── Navigation ── */
 .top-nav {
   position: sticky; top: 0; z-index: 100;
