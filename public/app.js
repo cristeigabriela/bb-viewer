@@ -2836,7 +2836,8 @@ function dedupAnonSiblings(td) {
   });
 }
 function renderFieldTable(fields, opts) {
-  const table = el("table", { className: "data-table field-table" });
+  const depth = opts.depth ?? 0;
+  const table = el("table", { className: "data-table field-table", style: `--depth:${depth}` });
   const cg = el("colgroup", {});
   for (const c of ["col-offset", "col-bits", "col-name", "col-type", "col-size", "col-align"]) {
     cg.appendChild(el("col", { className: c }));
@@ -2894,7 +2895,8 @@ function appendFieldRows(tbody, fields, opts) {
           parentName: opts.parentName,
           parentKind: anonKind,
           baseOffset: absoluteOffset,
-          visited
+          visited,
+          depth: (opts.depth ?? 0) + 1
         }));
         toggle.addEventListener("click", () => {
           nestedBody.classList.toggle("collapsed");
@@ -2944,7 +2946,8 @@ function appendFieldRows(tbody, fields, opts) {
             parentName: recordName,
             parentKind: recordKind(nested),
             baseOffset: 0,
-            visited: childVisited
+            visited: childVisited,
+            depth: (opts.depth ?? 0) + 1
           }));
           toggle.addEventListener("click", () => {
             nestedBody.classList.toggle("collapsed");

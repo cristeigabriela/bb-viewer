@@ -52,10 +52,14 @@ interface FieldTableOpts {
   baseOffset: number;
   /** Set of NAMED records visited so far (cycle guard). */
   visited: Set<string>;
+  /** Nesting depth (0 = outermost). Drives the file-tree-style indent on the
+   *  Name column via a `--depth` CSS custom property. */
+  depth?: number;
 }
 
 function renderFieldTable(fields: Field[], opts: FieldTableOpts): HTMLElement {
-  const table = el("table", { className: "data-table field-table" });
+  const depth = opts.depth ?? 0;
+  const table = el("table", { className: "data-table field-table", style: `--depth:${depth}` });
   // colgroup so nested .field-tables (inside .nested-body) align column-for-
   // column with the outer table. Combined with `table-layout: fixed` (in CSS)
   // this gives perfect column alignment across any depth of expansion.
@@ -143,6 +147,7 @@ function appendFieldRows(tbody: HTMLElement, fields: Field[], opts: FieldTableOp
           parentKind: anonKind,
           baseOffset: absoluteOffset,
           visited,
+          depth: (opts.depth ?? 0) + 1,
         }));
         toggle.addEventListener("click", () => {
           nestedBody.classList.toggle("collapsed");
@@ -191,6 +196,7 @@ function appendFieldRows(tbody: HTMLElement, fields: Field[], opts: FieldTableOp
           nestedBody.appendChild(renderFieldTable(nested.fields, {
             parentName: recordName, parentKind: recordKind(nested),
             baseOffset: 0, visited: childVisited,
+            depth: (opts.depth ?? 0) + 1,
           }));
           toggle.addEventListener("click", () => {
             nestedBody.classList.toggle("collapsed");

@@ -1033,6 +1033,17 @@ main#content { padding-bottom: 28px; }
 .field-table col.col-size   { width: 60px; }
 .field-table col.col-align  { width: 60px; }
 .field-table td, .field-table th { overflow: hidden; text-overflow: ellipsis; }
+/* Depth-based indent on the Name column gives a file-tree look while
+   keeping every other column rail-straight for offset/size scanning.
+   --depth is set on each .field-table (0 = outermost). */
+.field-table .field-name-col {
+  padding-left: calc(var(--depth, 0) * 16px + 8px) !important;
+}
+/* Nested-toggle row also indents so the toggle visually sits "inside"
+   its parent record's level. */
+.nested-toggle {
+  padding-left: calc(var(--depth, 0) * 16px + 10px) !important;
+}
 
 /* ── Nested type expansion in field table ── */
 .nested-expansion-row > td {
@@ -1043,6 +1054,7 @@ main#content { padding-bottom: 28px; }
   display: flex; align-items: center; gap: 6px; cursor: pointer;
   padding: 4px 10px; user-select: none; font-size: 0.82rem;
   background: var(--bg);
+  /* padding-left also overridden by the depth-aware rule above */
 }
 .nested-toggle:hover { color: var(--accent); }
 .nested-toggle .collapse-arrow { font-size: 0.6rem; width: 10px; color: var(--text-dim); }
