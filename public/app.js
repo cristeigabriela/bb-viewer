@@ -1342,6 +1342,50 @@ function initClippy() {
   }
 }
 
+// src/status-bar.ts
+var state = {};
+function setupStatusBar() {
+  refreshStatusCounts();
+  renderContext();
+}
+function refreshStatusCounts() {
+  const counts = $(".sb-counts");
+  if (!counts)
+    return;
+  try {
+    const f = getFunctions().length;
+    const t = getTypes().length;
+    const td = getTypedefs().length;
+    const c = getConstants().length;
+    const e = getEnums().length;
+    counts.textContent = `${f.toLocaleString()} fn · ${t.toLocaleString()} types · ${td.toLocaleString()} typedefs · ${c.toLocaleString()} consts · ${e.toLocaleString()} enums`;
+  } catch {
+    counts.textContent = "—";
+  }
+  renderContext();
+}
+function updateStatusBar(opts) {
+  if (opts.path !== undefined)
+    state.path = opts.path;
+  renderContext();
+}
+function renderContext() {
+  const ds = $(".sb-ds");
+  const arch = $(".sb-arch");
+  const mode = $(".sb-mode");
+  const path = $(".sb-path");
+  if (ds)
+    ds.textContent = getCurrentDataset();
+  if (arch)
+    arch.textContent = getCurrentArch();
+  if (mode) {
+    mode.textContent = getCurrentMode();
+    mode.className = `sb-cell sb-mode sb-mode-${getCurrentMode()}`;
+  }
+  if (path)
+    path.textContent = state.path ?? "";
+}
+
 // src/irql.ts
 var IRQL_LEVELS = {
   PASSIVE_LEVEL: 0,
@@ -1939,15 +1983,15 @@ function buildSearchInput(placeholder, onChange, initial = "", initialRegex = fa
   return { element: wrap, getValue: () => input2.value, isRegex: () => useRegex };
 }
 function buildSortRow(columns, initial, onChange) {
-  const state = { ...initial };
+  const state2 = { ...initial };
   const row = el("div", { className: "sort-row" });
   const buttons = [];
   function refresh() {
     for (const btn of buttons) {
       const key = btn.getAttribute("data-sort-key");
       const lbl = btn.getAttribute("data-sort-label");
-      btn.className = `sort-btn ${state.sortBy === key ? "active" : ""}`;
-      btn.textContent = lbl + (state.sortBy === key ? state.sortDir === "asc" ? " ▲" : " ▼" : "");
+      btn.className = `sort-btn ${state2.sortBy === key ? "active" : ""}`;
+      btn.textContent = lbl + (state2.sortBy === key ? state2.sortDir === "asc" ? " ▲" : " ▼" : "");
     }
   }
   for (const [key, label] of columns) {
@@ -1955,20 +1999,20 @@ function buildSortRow(columns, initial, onChange) {
     btn.setAttribute("data-sort-key", key);
     btn.setAttribute("data-sort-label", label);
     btn.addEventListener("click", () => {
-      if (state.sortBy === key)
-        state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+      if (state2.sortBy === key)
+        state2.sortDir = state2.sortDir === "asc" ? "desc" : "asc";
       else {
-        state.sortBy = key;
-        state.sortDir = "asc";
+        state2.sortBy = key;
+        state2.sortDir = "asc";
       }
       refresh();
-      onChange(state);
+      onChange(state2);
     });
     buttons.push(btn);
     row.appendChild(btn);
   }
   refresh();
-  return { element: row, getState: () => state, refresh };
+  return { element: row, getState: () => state2, refresh };
 }
 function renderFilterChips(container, chips) {
   container.innerHTML = "";
@@ -2016,6 +2060,72 @@ function collapsibleSection(title, ...children) {
     arrow.textContent = body.classList.contains("collapsed") ? "▶" : "▼";
   });
   return section;
+}
+function renderBreadcrumb(parts) {
+  const nav = el("nav", { className: "breadcrumb" });
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      nav.appendChild(el("span", { className: "breadcrumb-sep" }, " › "));
+    }
+    if (part.href) {
+      nav.appendChild(el("a", { className: "breadcrumb-link", href: part.href }, part.label));
+    } else {
+      nav.appendChild(el("span", { className: "breadcrumb-current" }, part.label));
+    }
+  });
+  return nav;
+}
+function renderOutlinePanel(pageRoot) {
+  for (const old of Array.from(document.querySelectorAll(".outline-panel")))
+    old.remove();
+  const sections = Array.from(pageRoot.querySelectorAll(".collapsible-section"));
+  if (sections.length < 2)
+    return;
+  const panel = el("aside", { className: "outline-panel" });
+  panel.appendChild(el("div", { className: "outline-title" }, "OUTLINE"));
+  const list = el("ul", { className: "outline-list" });
+  sections.forEach((section, i) => {
+    const h3 = section.querySelector("h3");
+    if (!h3)
+      return;
+    const titleText = h3.textContent ?? `Section ${i + 1}`;
+    const id = `sec-${slugify(titleText)}-${i}`;
+    section.id = id;
+    const li = el("li", { className: "outline-item" });
+    const link = el("a", { href: "#", className: "outline-link" }, titleText);
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const body = section.querySelector(".section-body");
+      if (body?.classList.contains("collapsed")) {
+        section.querySelector(".section-header")?.click();
+      }
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    li.appendChild(link);
+    list.appendChild(li);
+  });
+  panel.appendChild(list);
+  document.body.appendChild(panel);
+}
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function withGutter(pre) {
+  const text = pre.textContent ?? "";
+  const lineCount = text.length === 0 ? 1 : text.split(`
+`).length;
+  const wrap = el("div", { className: "code-with-gutter" });
+  const gutter = el("pre", { className: "code-gutter mono" });
+  const nums = [];
+  for (let i = 1;i <= lineCount; i++)
+    nums.push(String(i));
+  gutter.textContent = nums.join(`
+`);
+  wrap.appendChild(gutter);
+  pre.classList.add("code-body");
+  wrap.appendChild(pre);
+  return wrap;
 }
 function renderPagination(container, currentPage, totalPages, onPage) {
   clear(container);
@@ -2667,10 +2777,14 @@ function renderFunctionDetail(container, name) {
     return;
   }
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/functions"), className: "back-link" }, "← All functions"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "functions", href: buildHash("/functions") },
+    { label: fn.name }
+  ]));
   pg.appendChild(el("h2", {}, fn.name));
   pg.appendChild(renderFuncDetailView(fn));
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }
 
 // src/views/types.ts
@@ -3232,7 +3346,10 @@ function renderTypeDetail(container, name) {
 function renderRecordDetail(container, td) {
   const kind = recordKind(td);
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "← All types"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "types", href: buildHash("/types") },
+    { label: `${kind}: ${td.name}` }
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, td.name));
   const tags = el("div", { className: "tag-row" });
   tags.appendChild(badge(kind, kind === "union" ? "tag-union" : "tag-struct"));
@@ -3258,7 +3375,7 @@ function renderRecordDetail(container, td) {
     const proto = el("pre", { className: "c-prototype" });
     proto.textContent = emitRecord(td, "", false).join(`
 `);
-    pg.appendChild(collapsibleSection("C Definition", proto));
+    pg.appendChild(collapsibleSection("C Definition", withGutter(proto)));
     requestAnimationFrame(() => highlightCode(proto));
   }
   pg.appendChild(collapsibleSection("Memory Layout", renderMemoryLayout(td)));
@@ -3278,10 +3395,14 @@ function renderRecordDetail(container, td) {
       appendXRefs(pg, a, ` via ${a}`);
   }
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }
 function renderTypedefDetail(container, t) {
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "← All types"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "types", href: buildHash("/types") },
+    { label: `typedef: ${t.name}` }
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, t.name));
   const tags = el("div", { className: "tag-row" });
   tags.appendChild(badge("typedef", "tag-typedef"));
@@ -3312,7 +3433,7 @@ function renderTypedefDetail(container, t) {
   pg.appendChild(collapsibleSection("Typedef chain", chainContainer));
   const cdef = el("pre", { className: "c-prototype" });
   cdef.textContent = `typedef ${t.canonical} ${t.name};`;
-  pg.appendChild(collapsibleSection("C Definition", cdef));
+  pg.appendChild(collapsibleSection("C Definition", withGutter(cdef)));
   requestAnimationFrame(() => highlightCode(cdef));
   if (t.underlying_record) {
     const underlyingRecord = findType(t.underlying_record);
@@ -3348,6 +3469,7 @@ function renderTypedefDetail(container, t) {
   }
   appendXRefs(pg, t.name);
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }
 function appendXRefs(pg, name, titleSuffix = "") {
   const xrefData = getXRef();
@@ -3974,7 +4096,10 @@ function renderConstantDetail(container, name) {
     return;
   }
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/constants"), className: "back-link" }, "← All constants"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "constants", href: buildHash("/constants") },
+    { label: c.name }
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, c.name));
   const valContent = el("div", {});
   valContent.appendChild(el("div", { className: "const-big-value" }, el("span", { className: "const-decimal" }, String(c.value)), el("span", { className: "const-hex" }, c.hex)));
@@ -4053,6 +4178,7 @@ function renderConstantDetail(container, name) {
     pg.appendChild(collapsibleSection(`Functions referencing this (${funcsUsing.size})`, list));
   }
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }
 function renderEnumDetail(container, name) {
   clear(container);
@@ -4066,7 +4192,10 @@ function renderEnumDetail(container, name) {
     return;
   }
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/constants"), className: "back-link" }, "← All constants"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "constants", href: buildHash("/constants") },
+    { label: `enum: ${e.name}` }
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, e.name));
   const tags = el("div", { className: "tag-row" });
   tags.appendChild(badge(`${e.constants.length} variants`, "tag-fields"));
@@ -4090,7 +4219,7 @@ function renderEnumDetail(container, name) {
   });
   code += `} ${e.name};`;
   proto.textContent = code;
-  pg.appendChild(collapsibleSection("C Definition", proto));
+  pg.appendChild(collapsibleSection("C Definition", withGutter(proto)));
   requestAnimationFrame(() => highlightCode(proto));
   const table = el("table", { className: "data-table" });
   table.appendChild(el("thead", {}, el("tr", {}, el("th", {}, "#"), el("th", {}, "Name"), el("th", {}, "Value"), el("th", {}, "Hex"))));
@@ -4101,6 +4230,7 @@ function renderEnumDetail(container, name) {
   table.appendChild(tbody);
   pg.appendChild(collapsibleSection("Variants", table));
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }
 
 // src/views/lookup.ts
@@ -4223,44 +4353,57 @@ async function init() {
   $("#app").style.display = "";
   setupSearchModal();
   setupDatasetSwitcher();
+  setupStatusBar();
   initClippy();
+  setOnDatasetChange(() => refreshStatusCounts());
+  const path = (view, name) => updateStatusBar({ path: name ? `${view} / ${name}` : view });
   route("/", () => {
     setActiveNav("home");
+    path("home");
     renderHome(content());
   });
   route("/functions", (_, q) => {
     setActiveNav("functions");
+    path("functions");
     renderFunctionsList(content(), q);
   });
   route("/functions/:name", (p) => {
     setActiveNav("functions");
+    path("functions", p.name);
     renderFunctionDetail(content(), p.name);
   });
   route("/types", (_, q) => {
     setActiveNav("types");
+    path("types");
     renderTypesList(content(), q);
   });
   route("/types/graph", () => {
     setActiveNav("types");
+    path("types / graph");
     renderTypeGraph(content());
   });
   route("/types/:name", (p) => {
     setActiveNav("types");
+    path("types", p.name);
     renderTypeDetail(content(), p.name);
   });
   route("/constants", (_, q) => {
     setActiveNav("constants");
+    path("constants");
     renderConstantsList(content(), q);
   });
   route("/constants/:name", (p) => {
     setActiveNav("constants");
+    path("constants", p.name);
     renderConstantDetail(content(), p.name);
   });
   route("/constants/enum/:name", (p) => {
     setActiveNav("constants");
+    path("constants / enum", p.name);
     renderEnumDetail(content(), p.name);
   });
   route("/q/:name", (p) => {
+    path("lookup", p.name);
     renderLookup(content(), p.name);
   });
   startRouter();

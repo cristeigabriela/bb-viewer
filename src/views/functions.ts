@@ -4,7 +4,7 @@ import { matchQuery } from "../utils";
 import { typeLink, constLink, renderTypeStr, headerLink, badge } from "../ui/links";
 import { buildHash, navigate } from "../router";
 import { buildFilterDropdown, FilterDropdownHandle } from "../ui/filter-dropdown";
-import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl } from "./shared";
+import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl, renderBreadcrumb, renderOutlinePanel } from "./shared";
 import { parseIrqlExpr, irqlMatches, formatIrql, irqlSeverityClass } from "../irql";
 import type { Func, Param } from "../types";
 
@@ -517,8 +517,12 @@ export function renderFunctionDetail(container: Element, name: string): void {
   if (!fn) { renderNotFound(container, "Function", name, buildHash("/functions"), "All functions", findSimilarNames(name)); return; }
 
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/functions"), className: "back-link" }, "← All functions"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "functions", href: buildHash("/functions") },
+    { label: fn.name },
+  ]));
   pg.appendChild(el("h2", {}, fn.name));
   pg.appendChild(renderFuncDetailView(fn));
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }

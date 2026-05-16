@@ -177,6 +177,92 @@ export function collapsibleSection(title: string, ...children: (Node | null)[]):
   return section;
 }
 
+/* ── Breadcrumbs (VS Code-style trail on detail pages) ── */
+
+export interface Crumb { label: string; href?: string; }
+
+export function renderBreadcrumb(parts: Crumb[]): HTMLElement {
+  const nav = el("nav", { className: "breadcrumb" });
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      nav.appendChild(el("span", { className: "breadcrumb-sep" }, " › "));
+    }
+    if (part.href) {
+      nav.appendChild(el("a", { className: "breadcrumb-link", href: part.href }, part.label));
+    } else {
+      nav.appendChild(el("span", { className: "breadcrumb-current" }, part.label));
+    }
+  });
+  return nav;
+}
+
+/* ── Outline panel (right rail of section anchors for long detail pages) ── */
+
+/** Build a fixed-position right-rail outline from each `.collapsible-section`
+ *  inside `pageRoot`. Each section gets an id derived from its title; the
+ *  rail's links scroll-and-jump to those ids. Skip when fewer than 2 sections.
+ *  The outline is appended directly to `document.body` so it positions
+ *  relative to the viewport, not the content column. */
+export function renderOutlinePanel(pageRoot: HTMLElement): void {
+  // Strip any prior outline (we re-render on every navigation).
+  for (const old of Array.from(document.querySelectorAll(".outline-panel"))) old.remove();
+
+  const sections = Array.from(pageRoot.querySelectorAll(".collapsible-section"));
+  if (sections.length < 2) return;
+
+  const panel = el("aside", { className: "outline-panel" });
+  panel.appendChild(el("div", { className: "outline-title" }, "OUTLINE"));
+  const list = el("ul", { className: "outline-list" });
+
+  sections.forEach((section, i) => {
+    const h3 = section.querySelector("h3");
+    if (!h3) return;
+    const titleText = h3.textContent ?? `Section ${i + 1}`;
+    const id = `sec-${slugify(titleText)}-${i}`;
+    (section as HTMLElement).id = id;
+    const li = el("li", { className: "outline-item" });
+    // Plain `href="#"` so the global router click-interceptor (which
+    // matches anchors whose href starts with `#/`) doesn't mutate the URL.
+    const link = el("a", { href: "#", className: "outline-link" }, titleText);
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const body = section.querySelector(".section-body");
+      if (body?.classList.contains("collapsed")) {
+        (section.querySelector(".section-header") as HTMLElement | null)?.click();
+      }
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    li.appendChild(link);
+    list.appendChild(li);
+  });
+  panel.appendChild(list);
+  document.body.appendChild(panel);
+}
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/* ── Gutter line numbers (editor-style left margin on <pre> blocks) ── */
+
+/** Wrap a `<pre>` element with a sibling gutter showing line numbers. The
+ *  gutter is plain text with matching line-height so it scrolls in sync.
+ *  Call after the pre's text has been set (and BEFORE arborium highlights). */
+export function withGutter(pre: HTMLElement): HTMLElement {
+  const text = pre.textContent ?? "";
+  const lineCount = text.length === 0 ? 1 : text.split("\n").length;
+  const wrap = el("div", { className: "code-with-gutter" });
+  const gutter = el("pre", { className: "code-gutter mono" });
+  const nums: string[] = [];
+  for (let i = 1; i <= lineCount; i++) nums.push(String(i));
+  gutter.textContent = nums.join("\n");
+  wrap.appendChild(gutter);
+  pre.classList.add("code-body");
+  wrap.appendChild(pre);
+  return wrap;
+}
+
 /* ── Pagination ── */
 
 export function renderPagination(

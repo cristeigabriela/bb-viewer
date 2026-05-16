@@ -5,7 +5,7 @@ import { matchQuery } from "../utils";
 import { typeLink, funcLink, enumLink, renderTypeStr, headerLink, badge, highlightCode } from "../ui/links";
 import { buildHash } from "../router";
 import { buildFilterDropdown, FilterDropdownHandle } from "../ui/filter-dropdown";
-import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl } from "./shared";
+import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl, renderBreadcrumb, renderOutlinePanel, withGutter } from "./shared";
 import type { TypeDef, Field, Typedef } from "../types";
 
 const PAGE_SIZE = 50;
@@ -569,7 +569,10 @@ export function renderTypeDetail(container: Element, name: string): void {
 function renderRecordDetail(container: Element, td: TypeDef): void {
   const kind = recordKind(td);
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "← All types"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "types", href: buildHash("/types") },
+    { label: `${kind}: ${td.name}` },
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, td.name));
 
   const tags = el("div", { className: "tag-row" });
@@ -595,7 +598,7 @@ function renderRecordDetail(container: Element, td: TypeDef): void {
   if (td.fields.length > 0) {
     const proto = el("pre", { className: "c-prototype" });
     proto.textContent = emitRecord(td, "", false).join("\n");
-    pg.appendChild(collapsibleSection("C Definition", proto));
+    pg.appendChild(collapsibleSection("C Definition", withGutter(proto)));
     requestAnimationFrame(() => highlightCode(proto));
   }
 
@@ -616,13 +619,17 @@ function renderRecordDetail(container: Element, td: TypeDef): void {
   }
 
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }
 
 /* ── Typedef detail ─────────────────────────────────────────────────── */
 
 function renderTypedefDetail(container: Element, t: Typedef): void {
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "← All types"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "types", href: buildHash("/types") },
+    { label: `typedef: ${t.name}` },
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, t.name));
 
   const tags = el("div", { className: "tag-row" });
@@ -652,7 +659,7 @@ function renderTypedefDetail(container: Element, t: Typedef): void {
   // C definition line
   const cdef = el("pre", { className: "c-prototype" });
   cdef.textContent = `typedef ${t.canonical} ${t.name};`;
-  pg.appendChild(collapsibleSection("C Definition", cdef));
+  pg.appendChild(collapsibleSection("C Definition", withGutter(cdef)));
   requestAnimationFrame(() => highlightCode(cdef));
 
   // Underlying record/enum link (if any). The typedef.kind discriminator tells
@@ -699,6 +706,7 @@ function renderTypedefDetail(container: Element, t: Typedef): void {
   appendXRefs(pg, t.name);
 
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }
 
 /* ── Shared xref renderer ───────────────────────────────────────────── */

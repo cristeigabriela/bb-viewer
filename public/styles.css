@@ -606,6 +606,111 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 }
 .param-values { display: flex; gap: 4px; flex-wrap: wrap; }
 
+/* ── Status bar (VS Code-style footer) ── */
+.status-bar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: 22px; line-height: 22px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  font-family: "Courier New", monospace;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  z-index: 50;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.status-bar .sb-left, .status-bar .sb-middle, .status-bar .sb-right {
+  display: flex; align-items: center; gap: 12px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.status-bar .sb-middle { flex: 1; justify-content: center; min-width: 0; }
+.status-bar .sb-cell { color: var(--text); padding: 0 4px; }
+.status-bar .sb-ds, .status-bar .sb-arch { color: var(--accent); }
+.status-bar .sb-mode-user { color: var(--val-green); }
+.status-bar .sb-mode-kernel { color: var(--val-yellow); }
+.status-bar .sb-path { color: var(--text-dim); font-size: 0.7rem; }
+.status-bar .sb-counts { color: var(--text-dim); font-size: 0.7rem; }
+
+/* Leave room for the status bar so content isn't covered. */
+main#content { padding-bottom: 28px; }
+
+/* ── Breadcrumbs ── */
+.breadcrumb {
+  display: flex; align-items: center; flex-wrap: wrap;
+  font-family: "Courier New", monospace; font-size: 0.78rem;
+  color: var(--text-dim);
+  padding: 4px 0 8px;
+  border-bottom: 1px dashed var(--border-light);
+  margin-bottom: 10px;
+}
+.breadcrumb-sep { color: var(--border); padding: 0 2px; }
+.breadcrumb-link { color: var(--text-dim); text-decoration: none; }
+.breadcrumb-link:hover { color: var(--accent); text-decoration: underline; }
+.breadcrumb-current { color: var(--accent); font-weight: 600; }
+
+/* ── Outline panel (fixed right rail with jump-to-section links) ── */
+.outline-panel {
+  position: fixed; right: 12px; top: 90px;
+  width: 200px; max-height: calc(100vh - 130px);
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  padding: 8px 10px;
+  font-family: "Courier New", monospace;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  z-index: 30;
+}
+.outline-title {
+  font-size: 0.66rem; letter-spacing: 0.1em;
+  color: var(--text-dim);
+  padding-bottom: 4px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-light);
+}
+.outline-list { list-style: none; padding: 0; margin: 0; }
+.outline-item { padding: 2px 0; }
+.outline-link {
+  display: block; padding: 1px 4px;
+  color: var(--text-dim); text-decoration: none;
+  border-left: 2px solid transparent;
+}
+.outline-link:hover {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(255, 255, 255, 0.02);
+}
+/* Auto-hide outline on narrow viewports — the content column needs the room. */
+@media (max-width: 1400px) { .outline-panel { display: none; } }
+
+/* ── Code gutter (editor-style line numbers) ── */
+.code-with-gutter {
+  display: flex; align-items: stretch;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.code-with-gutter .code-gutter {
+  margin: 0; padding: 12px 8px 12px 12px;
+  background: var(--bg);
+  color: var(--text-dim);
+  border-right: 1px solid var(--border-light);
+  text-align: right;
+  font-size: 0.78rem; line-height: 1.5;
+  user-select: none;
+  min-width: 32px;
+  white-space: pre;
+  opacity: 0.55;
+}
+.code-with-gutter .code-body {
+  margin: 0; flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 0.78rem; line-height: 1.5;
+  overflow-x: auto;
+}
+
 /* ── Cross-references ── */
 .xref-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .xref-chip {
