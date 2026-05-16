@@ -606,6 +606,54 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 }
 .param-values { display: flex; gap: 4px; flex-wrap: wrap; }
 
+/* ── Union member-overlay diagram ── */
+.union-overlay {
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 14px 16px 18px;
+  margin-top: 4px;
+}
+.union-overlay-scale {
+  position: relative;
+  height: 18px;
+  margin-bottom: 4px;
+  border-bottom: 1px dashed var(--border-light);
+}
+.union-overlay-scale .scale-marker {
+  position: absolute;
+  font-family: "Courier New", monospace;
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  transform: translateX(-50%);
+}
+.union-overlay-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+}
+.union-overlay-track {
+  position: relative;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-light);
+}
+.union-overlay-bar {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-right: 1px solid rgba(0, 0, 0, 0.4);
+}
+.union-overlay-bar.union-overlay-anon { background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.18) 4px, rgba(0,0,0,0.18) 8px); }
+.union-overlay-unused {
+  position: absolute; top: 0; bottom: 0;
+  background: repeating-linear-gradient(45deg, #30363d, #30363d 2px, transparent 2px, transparent 4px);
+  opacity: 0.45;
+}
+.union-overlay-label {
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 /* ── Status bar (VS Code-style footer) ── */
 .status-bar {
   position: fixed; left: 0; right: 0; bottom: 0;

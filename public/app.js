@@ -2834,8 +2834,9 @@ function appendFieldRows(tbody, fields, opts) {
       tbody.appendChild(padRow);
     }
     const absoluteOffset = baseOffset + f.offset;
-    if (f.is_anonymous && f.anon_ref) {
+    if (f.anon_ref) {
       const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      const isUnnamed = f.is_anonymous || f.name.startsWith("<anonymous_");
       if (anon) {
         const anonKind = recordKind(anon);
         const groupId = `anon-${anon.enclosing_record ?? "?"}-${(anon.field_path ?? []).join("-")}-${Math.random().toString(36).slice(2, 7)}`;
@@ -2843,9 +2844,9 @@ function appendFieldRows(tbody, fields, opts) {
         const arrow = el("span", { className: "collapse-arrow" }, "▶");
         headerRow.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
         headerRow.appendChild(el("td", {}));
-        const nameTd = el("td", { className: "dim italic anon-toggle-cell" });
+        const nameTd = el("td", { className: `anon-toggle-cell${isUnnamed ? " dim italic" : " mono bold"}` });
         nameTd.appendChild(arrow);
-        nameTd.appendChild(document.createTextNode(" anon"));
+        nameTd.appendChild(document.createTextNode(isUnnamed ? " anon" : ` ${f.name}`));
         headerRow.appendChild(nameTd);
         const typeTd = el("td", { className: "mono italic dim" });
         typeTd.appendChild(document.createTextNode(`(anonymous ${anonKind}, ${anon.fields.length} fields)`));
@@ -2881,7 +2882,7 @@ function appendFieldRows(tbody, fields, opts) {
         const errRow = el("tr", { className: "anon-row" });
         errRow.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
         errRow.appendChild(el("td", {}));
-        errRow.appendChild(el("td", { className: "dim italic" }, "anonymous (unresolved)"));
+        errRow.appendChild(el("td", { className: isUnnamed ? "dim italic" : "mono bold" }, isUnnamed ? "anonymous (unresolved)" : `${f.name} (unresolved anon)`));
         errRow.appendChild(el("td", {}));
         errRow.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
         errRow.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
@@ -2940,7 +2941,7 @@ function appendFieldRows(tbody, fields, opts) {
 function fmtAbsOffset(n) {
   return `0x${n.toString(16).toUpperCase().padStart(4, "0")}`;
 }
-function emitRecord(td, indent, asMember, baseOffset = 0, depth = 0) {
+function emitRecord(td, indent, asMember, baseOffset = 0, depth = 0, instanceName) {
   const lines = [];
   const keyword = recordKind(td) === "union" ? "union" : "struct";
   if (asMember) {
@@ -2951,13 +2952,15 @@ function emitRecord(td, indent, asMember, baseOffset = 0, depth = 0) {
   const inner = indent + "    ";
   for (const f of td.fields) {
     const absOffset = baseOffset + f.offset;
-    if (f.is_anonymous && f.anon_ref) {
+    if (f.anon_ref) {
       const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      const isUnnamed = f.is_anonymous || f.name.startsWith("<anonymous_");
       if (anon) {
-        for (const ln of emitRecord(anon, inner, true, absOffset, depth + 1))
+        const inst = isUnnamed ? undefined : f.name;
+        for (const ln of emitRecord(anon, inner, true, absOffset, depth + 1, inst))
           lines.push(ln);
       } else {
-        lines.push(`${inner}/* unresolved anonymous ${f.anon_ref.kind} */`);
+        lines.push(`${inner}/* unresolved anonymous ${f.anon_ref.kind}${isUnnamed ? "" : " " + f.name} */`);
       }
     } else {
       let typeStr = f.type ?? "?";
@@ -2971,7 +2974,7 @@ function emitRecord(td, indent, asMember, baseOffset = 0, depth = 0) {
     }
   }
   if (asMember) {
-    let suffix = `${indent}};`;
+    let suffix = `${indent}}${instanceName ? ` ${instanceName}` : ""};`;
     if (td.size != null)
       suffix += `  /* size: ${td.size}, align: ${maxAlign(td)} */`;
     lines.push(suffix);
@@ -3000,7 +3003,64 @@ function maxAlign(td) {
   }
   return m;
 }
+function renderUnionOverlay(td) {
+  const content = el("div", {});
+  const totalBytes = td.size ?? Math.max(...td.fields.map((f) => f.size), 0);
+  if (!totalBytes || td.fields.length === 0) {
+    content.appendChild(el("p", { className: "dim" }, "No member overlay information available."));
+    return content;
+  }
+  const wrap = el("div", { className: "union-overlay" });
+  const scale = el("div", { className: "union-overlay-scale" });
+  const markerCount = Math.min(8, totalBytes);
+  const step = Math.ceil(totalBytes / markerCount);
+  for (let i = 0;i <= markerCount; i++) {
+    const offset = Math.min(i * step, totalBytes);
+    scale.appendChild(el("span", { className: "scale-marker", style: `left:${offset / totalBytes * 100}%` }, `0x${offset.toString(16).toUpperCase()}`));
+  }
+  wrap.appendChild(scale);
+  td.fields.forEach((f, i) => {
+    const color = FIELD_COLORS[i % FIELD_COLORS.length];
+    const row = el("div", { className: "union-overlay-row" });
+    const track = el("div", { className: "union-overlay-track" });
+    const bar = el("div", {
+      className: `union-overlay-bar${f.is_anonymous ? " union-overlay-anon" : ""}`,
+      style: `width:${f.size / totalBytes * 100}%;background:${color}`
+    });
+    bar.title = `${f.name}: ${f.size}B at 0x0`;
+    track.appendChild(bar);
+    if (f.size < totalBytes) {
+      const pad = el("div", {
+        className: "union-overlay-unused",
+        style: `left:${f.size / totalBytes * 100}%;width:${(totalBytes - f.size) / totalBytes * 100}%`
+      });
+      pad.title = `${totalBytes - f.size}B unused by this member`;
+      track.appendChild(pad);
+    }
+    row.appendChild(track);
+    const label = el("div", { className: "union-overlay-label mono" });
+    label.appendChild(el("span", { className: "union-overlay-name bold", style: `color:${color}` }, f.is_anonymous ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name));
+    label.appendChild(el("span", { className: "union-overlay-meta dim" }, ` ${f.size}B / ${totalBytes}B`));
+    if (f.type)
+      label.appendChild(el("span", { className: "union-overlay-type dim" }, ` ${f.type}`));
+    row.appendChild(label);
+    wrap.appendChild(row);
+  });
+  content.appendChild(wrap);
+  const stats = el("div", { className: "type-stats" });
+  const maxMember = Math.max(...td.fields.map((f) => f.size), 0);
+  stats.appendChild(el("span", {}, "Kind: union"));
+  stats.appendChild(el("span", {}, `Size: ${totalBytes}B (max of ${td.fields.length} members)`));
+  stats.appendChild(el("span", {}, `Largest member: ${maxMember}B`));
+  if (td.fields.length > 0) {
+    stats.appendChild(el("span", {}, `Max align: ${Math.max(...td.fields.map((f) => f.alignment), 1)}`));
+  }
+  content.appendChild(stats);
+  return content;
+}
 function renderMemoryLayout(td) {
+  if (recordKind(td) === "union")
+    return renderUnionOverlay(td);
   const content = el("div", {});
   if (!td.size || td.fields.length === 0) {
     content.appendChild(el("p", { className: "dim" }, "No layout information available."));
@@ -3381,7 +3441,7 @@ function renderRecordDetail(container, td) {
     pg.appendChild(collapsibleSection("C Definition", withGutter(proto)));
     requestAnimationFrame(() => highlightCode(proto));
   }
-  pg.appendChild(collapsibleSection("Memory Layout", renderMemoryLayout(td)));
+  pg.appendChild(collapsibleSection(kind === "union" ? "Member Overlay" : "Memory Layout", renderMemoryLayout(td)));
   if (td.fields.length > 0) {
     pg.appendChild(collapsibleSection("Fields", renderFieldTable(td.fields, {
       parentName: td.name,

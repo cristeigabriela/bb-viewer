@@ -63,21 +63,23 @@ function appendFieldRows(tbody: HTMLElement, fields: Field[], opts: FieldTableOp
 
     const absoluteOffset = baseOffset + f.offset;
 
-    if (f.is_anonymous && f.anon_ref) {
+    // `anon_ref` (with no `is_anonymous`) covers NAMED anonymous-typed members
+    // like `union { ... } u` in _LARGE_INTEGER. We still inline-expand them,
+    // but preserve the variable name (e.g. "u") in the toggle row.
+    if (f.anon_ref) {
       const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      const isUnnamed = f.is_anonymous || f.name.startsWith("<anonymous_");
       if (anon) {
         const anonKind = recordKind(anon);
-        // Collapsible header row: clicking toggles the inner-field rows beneath.
-        // The class `anon-collapsed` is the source of truth; child rows watch via CSS.
         const groupId = `anon-${anon.enclosing_record ?? "?"}-${(anon.field_path ?? []).join("-")}-${Math.random().toString(36).slice(2, 7)}`;
         const headerRow = el("tr", { className: "anon-row anon-header", "data-anon-id": groupId });
         const arrow = el("span", { className: "collapse-arrow" }, "▶");
         headerRow.appendChild(el("td", { className: "mono offset-col" },
           `0x${absoluteOffset.toString(16).toUpperCase()}`));
         headerRow.appendChild(el("td", {}));
-        const nameTd = el("td", { className: "dim italic anon-toggle-cell" });
+        const nameTd = el("td", { className: `anon-toggle-cell${isUnnamed ? " dim italic" : " mono bold"}` });
         nameTd.appendChild(arrow);
-        nameTd.appendChild(document.createTextNode(" anon"));
+        nameTd.appendChild(document.createTextNode(isUnnamed ? " anon" : ` ${f.name}`));
         headerRow.appendChild(nameTd);
         const typeTd = el("td", { className: "mono italic dim" });
         typeTd.appendChild(document.createTextNode(`(anonymous ${anonKind}, ${anon.fields.length} fields)`));
@@ -113,7 +115,8 @@ function appendFieldRows(tbody: HTMLElement, fields: Field[], opts: FieldTableOp
         const errRow = el("tr", { className: "anon-row" });
         errRow.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
         errRow.appendChild(el("td", {}));
-        errRow.appendChild(el("td", { className: "dim italic" }, "anonymous (unresolved)"));
+        errRow.appendChild(el("td", { className: isUnnamed ? "dim italic" : "mono bold" },
+          isUnnamed ? "anonymous (unresolved)" : `${f.name} (unresolved anon)`));
         errRow.appendChild(el("td", {}));
         errRow.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
         errRow.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
@@ -188,6 +191,9 @@ function emitRecord(
   asMember: boolean,
   baseOffset: number = 0,
   depth: number = 0,
+  /** Member variable name for a NAMED anonymous-typed member (e.g. `u` in
+   *  `union { ... } u`). Unnamed members pass undefined. */
+  instanceName?: string,
 ): string[] {
   const lines: string[] = [];
   const keyword = recordKind(td) === "union" ? "union" : "struct";
@@ -201,12 +207,16 @@ function emitRecord(
 
   for (const f of td.fields) {
     const absOffset = baseOffset + f.offset;
-    if (f.is_anonymous && f.anon_ref) {
+    // Anonymous-typed members — recurse whether or not the variable has a name.
+    // Unnamed members emit `struct {…};`, named members emit `struct {…} u;`.
+    if (f.anon_ref) {
       const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      const isUnnamed = f.is_anonymous || f.name.startsWith("<anonymous_");
       if (anon) {
-        for (const ln of emitRecord(anon, inner, true, absOffset, depth + 1)) lines.push(ln);
+        const inst = isUnnamed ? undefined : f.name;
+        for (const ln of emitRecord(anon, inner, true, absOffset, depth + 1, inst)) lines.push(ln);
       } else {
-        lines.push(`${inner}/* unresolved anonymous ${f.anon_ref.kind} */`);
+        lines.push(`${inner}/* unresolved anonymous ${f.anon_ref.kind}${isUnnamed ? "" : " " + f.name} */`);
       }
     } else {
       let typeStr = f.type ?? "?";
@@ -226,7 +236,7 @@ function emitRecord(
   }
 
   if (asMember) {
-    let suffix = `${indent}};`;
+    let suffix = `${indent}}${instanceName ? ` ${instanceName}` : ""};`;
     if (td.size != null) suffix += `  /* size: ${td.size}, align: ${maxAlign(td)} */`;
     lines.push(suffix);
   } else {
@@ -256,7 +266,72 @@ function maxAlign(td: TypeDef): number {
 
 /* ── Memory layout viz ──────────────────────────────────────────────── */
 
+/** Unions don't have a "layout" the way structs do — every member starts at
+ *  offset 0 and the record's size is the max of the member sizes. Render them
+ *  as a member-overlay diagram: one horizontal row per member, each showing
+ *  the bytes it actually occupies, against a faded full-width union bar. */
+function renderUnionOverlay(td: TypeDef): HTMLElement {
+  const content = el("div", {});
+  const totalBytes = td.size ?? Math.max(...td.fields.map(f => f.size), 0);
+  if (!totalBytes || td.fields.length === 0) {
+    content.appendChild(el("p", { className: "dim" }, "No member overlay information available."));
+    return content;
+  }
+
+  const wrap = el("div", { className: "union-overlay" });
+  const scale = el("div", { className: "union-overlay-scale" });
+  const markerCount = Math.min(8, totalBytes);
+  const step = Math.ceil(totalBytes / markerCount);
+  for (let i = 0; i <= markerCount; i++) {
+    const offset = Math.min(i * step, totalBytes);
+    scale.appendChild(el("span", { className: "scale-marker", style: `left:${(offset / totalBytes) * 100}%` },
+      `0x${offset.toString(16).toUpperCase()}`));
+  }
+  wrap.appendChild(scale);
+
+  td.fields.forEach((f, i) => {
+    const color = FIELD_COLORS[i % FIELD_COLORS.length];
+    const row = el("div", { className: "union-overlay-row" });
+    const track = el("div", { className: "union-overlay-track" });
+    const bar = el("div", {
+      className: `union-overlay-bar${f.is_anonymous ? " union-overlay-anon" : ""}`,
+      style: `width:${(f.size / totalBytes) * 100}%;background:${color}`,
+    });
+    bar.title = `${f.name}: ${f.size}B at 0x0`;
+    track.appendChild(bar);
+    if (f.size < totalBytes) {
+      const pad = el("div", {
+        className: "union-overlay-unused",
+        style: `left:${(f.size / totalBytes) * 100}%;width:${((totalBytes - f.size) / totalBytes) * 100}%`,
+      });
+      pad.title = `${totalBytes - f.size}B unused by this member`;
+      track.appendChild(pad);
+    }
+    row.appendChild(track);
+    const label = el("div", { className: "union-overlay-label mono" });
+    label.appendChild(el("span", { className: "union-overlay-name bold", style: `color:${color}` },
+      f.is_anonymous ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name));
+    label.appendChild(el("span", { className: "union-overlay-meta dim" }, ` ${f.size}B / ${totalBytes}B`));
+    if (f.type) label.appendChild(el("span", { className: "union-overlay-type dim" }, ` ${f.type}`));
+    row.appendChild(label);
+    wrap.appendChild(row);
+  });
+  content.appendChild(wrap);
+
+  const stats = el("div", { className: "type-stats" });
+  const maxMember = Math.max(...td.fields.map(f => f.size), 0);
+  stats.appendChild(el("span", {}, "Kind: union"));
+  stats.appendChild(el("span", {}, `Size: ${totalBytes}B (max of ${td.fields.length} members)`));
+  stats.appendChild(el("span", {}, `Largest member: ${maxMember}B`));
+  if (td.fields.length > 0) {
+    stats.appendChild(el("span", {}, `Max align: ${Math.max(...td.fields.map(f => f.alignment), 1)}`));
+  }
+  content.appendChild(stats);
+  return content;
+}
+
 function renderMemoryLayout(td: TypeDef): HTMLElement {
+  if (recordKind(td) === "union") return renderUnionOverlay(td);
   const content = el("div", {});
   if (!td.size || td.fields.length === 0) {
     content.appendChild(el("p", { className: "dim" }, "No layout information available."));
@@ -602,7 +677,9 @@ function renderRecordDetail(container: Element, td: TypeDef): void {
     requestAnimationFrame(() => highlightCode(proto));
   }
 
-  pg.appendChild(collapsibleSection("Memory Layout", renderMemoryLayout(td)));
+  pg.appendChild(collapsibleSection(
+    kind === "union" ? "Member Overlay" : "Memory Layout",
+    renderMemoryLayout(td)));
 
   if (td.fields.length > 0) {
     pg.appendChild(collapsibleSection("Fields", renderFieldTable(td.fields, {
