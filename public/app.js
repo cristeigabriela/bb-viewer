@@ -2837,6 +2837,11 @@ function dedupAnonSiblings(td) {
 }
 function renderFieldTable(fields, opts) {
   const table = el("table", { className: "data-table field-table" });
+  const cg = el("colgroup", {});
+  for (const c of ["col-offset", "col-bits", "col-name", "col-type", "col-size", "col-align"]) {
+    cg.appendChild(el("col", { className: c }));
+  }
+  table.appendChild(cg);
   table.appendChild(el("thead", {}, el("tr", {}, el("th", {}, "Offset"), el("th", {}, "Bits"), el("th", {}, "Name"), el("th", {}, "Type"), el("th", {}, "Size"), el("th", {}, "Align"))));
   const tbody = el("tbody", {});
   appendFieldRows(tbody, fields, opts);

@@ -1024,20 +1024,39 @@ main#content { padding-bottom: 28px; }
   color: var(--accent); background: var(--accent-dim); border-color: var(--accent);
 }
 
+/* ── Field-table column widths (kept consistent across nested expansions) ── */
+.field-table { table-layout: fixed; width: 100%; }
+.field-table col.col-offset { width: 80px; }
+.field-table col.col-bits   { width: 50px; }
+.field-table col.col-name   { width: 30%; }
+.field-table col.col-type   { width: auto; }
+.field-table col.col-size   { width: 60px; }
+.field-table col.col-align  { width: 60px; }
+.field-table td, .field-table th { overflow: hidden; text-overflow: ellipsis; }
+
 /* ── Nested type expansion in field table ── */
-.nested-expansion-row td {
-  padding: 0 10px 6px 30px !important;
+.nested-expansion-row > td {
+  padding: 0 !important;
   border-bottom: 1px solid var(--border-light);
 }
 .nested-toggle {
   display: flex; align-items: center; gap: 6px; cursor: pointer;
-  padding: 4px 0; user-select: none; font-size: 0.82rem;
+  padding: 4px 10px; user-select: none; font-size: 0.82rem;
+  background: var(--bg);
 }
 .nested-toggle:hover { color: var(--accent); }
 .nested-toggle .collapse-arrow { font-size: 0.6rem; width: 10px; color: var(--text-dim); }
-.nested-body { margin-left: 10px; border-left: 1px solid var(--accent); padding-left: 8px; }
+.nested-body {
+  /* No horizontal padding/margin — the inner table aligns column-for-column
+     with the outer. The left border alone signals the nesting hierarchy. */
+  border-left: 2px solid var(--accent);
+  background: rgba(255, 255, 255, 0.015);
+}
 .nested-body.collapsed { display: none; }
-.nested-body .data-table { font-size: 0.78rem; }
+/* Hide the duplicated column header in nested tables — the outer header
+   already describes the (identical) columns. */
+.nested-body .field-table > thead { display: none; }
+.nested-body .field-table { font-size: 0.78rem; }
 
 /* ── Arborium Syntax Highlighting ── */
 /* Inline highlighted code (e.g. expressions in tables) */

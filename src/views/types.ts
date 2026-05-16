@@ -56,6 +56,14 @@ interface FieldTableOpts {
 
 function renderFieldTable(fields: Field[], opts: FieldTableOpts): HTMLElement {
   const table = el("table", { className: "data-table field-table" });
+  // colgroup so nested .field-tables (inside .nested-body) align column-for-
+  // column with the outer table. Combined with `table-layout: fixed` (in CSS)
+  // this gives perfect column alignment across any depth of expansion.
+  const cg = el("colgroup", {});
+  for (const c of ["col-offset", "col-bits", "col-name", "col-type", "col-size", "col-align"]) {
+    cg.appendChild(el("col", { className: c }));
+  }
+  table.appendChild(cg);
   table.appendChild(el("thead", {},
     el("tr", {},
       el("th", {}, "Offset"), el("th", {}, "Bits"), el("th", {}, "Name"),
