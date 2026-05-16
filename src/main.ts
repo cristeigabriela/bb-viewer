@@ -6,6 +6,7 @@ import { setupDatasetSwitcher } from "./dataset-switcher";
 import { setupSearchModal } from "./search-modal";
 import { initClippy } from "./clippy";
 import { setupStatusBar, refreshStatusCounts, updateStatusBar } from "./status-bar";
+import { clearOutlinePanel } from "./views/shared";
 import { renderHome } from "./views/home";
 import { renderFunctionsList, renderFunctionDetail } from "./views/functions";
 import { renderTypesList, renderTypeDetail } from "./views/types";
@@ -57,7 +58,10 @@ async function init() {
   // Status-bar context refresh whenever data or route changes.
   setOnDatasetChange(() => refreshStatusCounts());
 
-  const path = (view: string, name?: string) => updateStatusBar({ path: name ? `${view} / ${name}` : view });
+  const path = (view: string, name?: string) => {
+    clearOutlinePanel();
+    updateStatusBar({ path: name ? `${view} / ${name}` : view });
+  };
 
   route("/", () => { setActiveNav("home"); path("home"); renderHome(content()); });
   route("/functions", (_, q) => { setActiveNav("functions"); path("functions"); renderFunctionsList(content(), q); });

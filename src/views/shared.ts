@@ -198,14 +198,19 @@ export function renderBreadcrumb(parts: Crumb[]): HTMLElement {
 
 /* ── Outline panel (right rail of section anchors for long detail pages) ── */
 
+/** Remove any outline panel currently attached to the body. Idempotent —
+ *  safe to call before every navigation, regardless of which view comes next. */
+export function clearOutlinePanel(): void {
+  for (const old of Array.from(document.querySelectorAll(".outline-panel"))) old.remove();
+}
+
 /** Build a fixed-position right-rail outline from each `.collapsible-section`
  *  inside `pageRoot`. Each section gets an id derived from its title; the
  *  rail's links scroll-and-jump to those ids. Skip when fewer than 2 sections.
  *  The outline is appended directly to `document.body` so it positions
  *  relative to the viewport, not the content column. */
 export function renderOutlinePanel(pageRoot: HTMLElement): void {
-  // Strip any prior outline (we re-render on every navigation).
-  for (const old of Array.from(document.querySelectorAll(".outline-panel"))) old.remove();
+  clearOutlinePanel();
 
   const sections = Array.from(pageRoot.querySelectorAll(".collapsible-section"));
   if (sections.length < 2) return;

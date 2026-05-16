@@ -1386,6 +1386,225 @@ function renderContext() {
     path.textContent = state.path ?? "";
 }
 
+// src/views/shared.ts
+function syncViewUrl(basePath, viewParams) {
+  const params = new URLSearchParams;
+  for (const [k, v] of Object.entries(viewParams)) {
+    if (v)
+      params.set(k, v);
+  }
+  params.set("ds", getCurrentDataset());
+  params.set("arch", getCurrentArch());
+  history.replaceState(null, "", `#${basePath}?${params}`);
+}
+function buildSearchInput(placeholder, onChange, initial = "", initialRegex = false) {
+  let useRegex = initialRegex;
+  const wrap = el("div", { className: "search-with-toggle" });
+  const input2 = el("input", {
+    type: "text",
+    placeholder,
+    className: "search-input"
+  });
+  input2.value = initial;
+  const regexBtn = el("button", { className: `regex-toggle-btn${useRegex ? " active" : ""}` }, ".*");
+  regexBtn.title = "Toggle regex mode";
+  regexBtn.addEventListener("click", () => {
+    useRegex = !useRegex;
+    regexBtn.classList.toggle("active", useRegex);
+    input2.placeholder = useRegex ? placeholder.replace(/\(glob:.*?\)/i, "(regex)") : placeholder;
+    onChange(input2.value, useRegex);
+  });
+  input2.addEventListener("input", debounce(() => {
+    onChange(input2.value, useRegex);
+  }, 200));
+  wrap.appendChild(input2);
+  wrap.appendChild(regexBtn);
+  return { element: wrap, getValue: () => input2.value, isRegex: () => useRegex };
+}
+function buildSortRow(columns, initial, onChange) {
+  const state2 = { ...initial };
+  const row = el("div", { className: "sort-row" });
+  const buttons = [];
+  function refresh() {
+    for (const btn of buttons) {
+      const key = btn.getAttribute("data-sort-key");
+      const lbl = btn.getAttribute("data-sort-label");
+      btn.className = `sort-btn ${state2.sortBy === key ? "active" : ""}`;
+      btn.textContent = lbl + (state2.sortBy === key ? state2.sortDir === "asc" ? " ▲" : " ▼" : "");
+    }
+  }
+  for (const [key, label] of columns) {
+    const btn = el("button", { className: "sort-btn" }, label);
+    btn.setAttribute("data-sort-key", key);
+    btn.setAttribute("data-sort-label", label);
+    btn.addEventListener("click", () => {
+      if (state2.sortBy === key)
+        state2.sortDir = state2.sortDir === "asc" ? "desc" : "asc";
+      else {
+        state2.sortBy = key;
+        state2.sortDir = "asc";
+      }
+      refresh();
+      onChange(state2);
+    });
+    buttons.push(btn);
+    row.appendChild(btn);
+  }
+  refresh();
+  return { element: row, getState: () => state2, refresh };
+}
+function renderFilterChips(container, chips) {
+  container.innerHTML = "";
+  for (const chip of chips) {
+    const span = el("span", { className: "active-filter" }, chip.label);
+    const btn = el("button", { className: "clear-filter-btn" }, "×");
+    btn.addEventListener("click", chip.onRemove);
+    span.appendChild(btn);
+    container.appendChild(span);
+  }
+}
+function renderNotFound(container, entity, name, backHref, backLabel, suggestions) {
+  const enc = (s) => encodeURIComponent(s);
+  const div = el("div", { className: "not-found" }, el("h2", {}, `${entity} not found`), el("p", {}, `No ${entity.toLowerCase()} named "${name}" was found.`));
+  if (suggestions && suggestions.length > 0) {
+    div.appendChild(el("p", { className: "dim" }, "Did you mean?"));
+    const list = el("div", { className: "suggestions" });
+    for (const s of suggestions) {
+      const href = s.kind === "function" ? buildHash(`/functions/${enc(s.name)}`) : s.kind === "type" ? buildHash(`/types/${enc(s.name)}`) : s.kind === "enum" ? buildHash(`/constants/enum/${enc(s.name)}`) : buildHash(`/constants/${enc(s.name)}`);
+      const chip = el("span", { className: "suggestion-chip" }, el("a", { href, className: "xref" }, s.name));
+      chip.appendChild(el("span", { className: "dim" }, ` (${s.kind})`));
+      list.appendChild(chip);
+    }
+    div.appendChild(list);
+  }
+  div.appendChild(el("a", { href: backHref }, `← ${backLabel}`));
+  container.appendChild(div);
+  return false;
+}
+function collapsibleSection(title, ...children) {
+  const section = el("div", { className: "collapsible-section" });
+  const header = el("div", { className: "section-header" });
+  const arrow = el("span", { className: "section-arrow" }, "▼");
+  header.appendChild(arrow);
+  header.appendChild(el("h3", {}, title));
+  section.appendChild(header);
+  const body = el("div", { className: "section-body" });
+  for (const child of children) {
+    if (child)
+      body.appendChild(child);
+  }
+  section.appendChild(body);
+  header.addEventListener("click", () => {
+    body.classList.toggle("collapsed");
+    arrow.textContent = body.classList.contains("collapsed") ? "▶" : "▼";
+  });
+  return section;
+}
+function renderBreadcrumb(parts) {
+  const nav = el("nav", { className: "breadcrumb" });
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      nav.appendChild(el("span", { className: "breadcrumb-sep" }, " › "));
+    }
+    if (part.href) {
+      nav.appendChild(el("a", { className: "breadcrumb-link", href: part.href }, part.label));
+    } else {
+      nav.appendChild(el("span", { className: "breadcrumb-current" }, part.label));
+    }
+  });
+  return nav;
+}
+function clearOutlinePanel() {
+  for (const old of Array.from(document.querySelectorAll(".outline-panel")))
+    old.remove();
+}
+function renderOutlinePanel(pageRoot) {
+  clearOutlinePanel();
+  const sections = Array.from(pageRoot.querySelectorAll(".collapsible-section"));
+  if (sections.length < 2)
+    return;
+  const panel = el("aside", { className: "outline-panel" });
+  panel.appendChild(el("div", { className: "outline-title" }, "OUTLINE"));
+  const list = el("ul", { className: "outline-list" });
+  sections.forEach((section, i) => {
+    const h3 = section.querySelector("h3");
+    if (!h3)
+      return;
+    const titleText = h3.textContent ?? `Section ${i + 1}`;
+    const id = `sec-${slugify(titleText)}-${i}`;
+    section.id = id;
+    const li = el("li", { className: "outline-item" });
+    const link = el("a", { href: "#", className: "outline-link" }, titleText);
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const body = section.querySelector(".section-body");
+      if (body?.classList.contains("collapsed")) {
+        section.querySelector(".section-header")?.click();
+      }
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    li.appendChild(link);
+    list.appendChild(li);
+  });
+  panel.appendChild(list);
+  document.body.appendChild(panel);
+}
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function withGutter(pre) {
+  const text = pre.textContent ?? "";
+  const lineCount = text.length === 0 ? 1 : text.split(`
+`).length;
+  const wrap = el("div", { className: "code-with-gutter" });
+  const gutter = el("pre", { className: "code-gutter mono" });
+  const nums = [];
+  for (let i = 1;i <= lineCount; i++)
+    nums.push(String(i));
+  gutter.textContent = nums.join(`
+`);
+  wrap.appendChild(gutter);
+  pre.classList.add("code-body");
+  wrap.appendChild(pre);
+  return wrap;
+}
+function renderPagination(container, currentPage, totalPages, onPage) {
+  clear(container);
+  if (totalPages <= 1)
+    return;
+  const nav = el("nav", { className: "pagination" });
+  const addBtn = (label, page, disabled, active = false) => {
+    const btn = el("button", {
+      className: `page-btn ${active ? "active" : ""} ${disabled ? "disabled" : ""}`.trim()
+    }, label);
+    if (!disabled && !active)
+      btn.addEventListener("click", () => onPage(page));
+    nav.appendChild(btn);
+  };
+  addBtn("«", 0, currentPage === 0);
+  addBtn("‹", currentPage - 1, currentPage === 0);
+  const windowSize = 3;
+  let start = Math.max(0, currentPage - windowSize);
+  let end = Math.min(totalPages - 1, currentPage + windowSize);
+  if (start > 0) {
+    addBtn("1", 0, false);
+    if (start > 1)
+      nav.appendChild(el("span", { className: "page-ellipsis" }, "…"));
+  }
+  for (let i = start;i <= end; i++) {
+    addBtn(String(i + 1), i, false, i === currentPage);
+  }
+  if (end < totalPages - 1) {
+    if (end < totalPages - 2)
+      nav.appendChild(el("span", { className: "page-ellipsis" }, "…"));
+    addBtn(String(totalPages), totalPages - 1, false);
+  }
+  addBtn("›", currentPage + 1, currentPage === totalPages - 1);
+  addBtn("»", totalPages - 1, currentPage === totalPages - 1);
+  container.appendChild(nav);
+}
+
 // src/irql.ts
 var IRQL_LEVELS = {
   PASSIVE_LEVEL: 0,
@@ -1945,222 +2164,6 @@ function buildFilterDropdown(label, allValues, activeSet, onChange) {
       renderOptions();
     }
   };
-}
-
-// src/views/shared.ts
-function syncViewUrl(basePath, viewParams) {
-  const params = new URLSearchParams;
-  for (const [k, v] of Object.entries(viewParams)) {
-    if (v)
-      params.set(k, v);
-  }
-  params.set("ds", getCurrentDataset());
-  params.set("arch", getCurrentArch());
-  history.replaceState(null, "", `#${basePath}?${params}`);
-}
-function buildSearchInput(placeholder, onChange, initial = "", initialRegex = false) {
-  let useRegex = initialRegex;
-  const wrap = el("div", { className: "search-with-toggle" });
-  const input2 = el("input", {
-    type: "text",
-    placeholder,
-    className: "search-input"
-  });
-  input2.value = initial;
-  const regexBtn = el("button", { className: `regex-toggle-btn${useRegex ? " active" : ""}` }, ".*");
-  regexBtn.title = "Toggle regex mode";
-  regexBtn.addEventListener("click", () => {
-    useRegex = !useRegex;
-    regexBtn.classList.toggle("active", useRegex);
-    input2.placeholder = useRegex ? placeholder.replace(/\(glob:.*?\)/i, "(regex)") : placeholder;
-    onChange(input2.value, useRegex);
-  });
-  input2.addEventListener("input", debounce(() => {
-    onChange(input2.value, useRegex);
-  }, 200));
-  wrap.appendChild(input2);
-  wrap.appendChild(regexBtn);
-  return { element: wrap, getValue: () => input2.value, isRegex: () => useRegex };
-}
-function buildSortRow(columns, initial, onChange) {
-  const state2 = { ...initial };
-  const row = el("div", { className: "sort-row" });
-  const buttons = [];
-  function refresh() {
-    for (const btn of buttons) {
-      const key = btn.getAttribute("data-sort-key");
-      const lbl = btn.getAttribute("data-sort-label");
-      btn.className = `sort-btn ${state2.sortBy === key ? "active" : ""}`;
-      btn.textContent = lbl + (state2.sortBy === key ? state2.sortDir === "asc" ? " ▲" : " ▼" : "");
-    }
-  }
-  for (const [key, label] of columns) {
-    const btn = el("button", { className: "sort-btn" }, label);
-    btn.setAttribute("data-sort-key", key);
-    btn.setAttribute("data-sort-label", label);
-    btn.addEventListener("click", () => {
-      if (state2.sortBy === key)
-        state2.sortDir = state2.sortDir === "asc" ? "desc" : "asc";
-      else {
-        state2.sortBy = key;
-        state2.sortDir = "asc";
-      }
-      refresh();
-      onChange(state2);
-    });
-    buttons.push(btn);
-    row.appendChild(btn);
-  }
-  refresh();
-  return { element: row, getState: () => state2, refresh };
-}
-function renderFilterChips(container, chips) {
-  container.innerHTML = "";
-  for (const chip of chips) {
-    const span = el("span", { className: "active-filter" }, chip.label);
-    const btn = el("button", { className: "clear-filter-btn" }, "×");
-    btn.addEventListener("click", chip.onRemove);
-    span.appendChild(btn);
-    container.appendChild(span);
-  }
-}
-function renderNotFound(container, entity, name, backHref, backLabel, suggestions) {
-  const enc = (s) => encodeURIComponent(s);
-  const div = el("div", { className: "not-found" }, el("h2", {}, `${entity} not found`), el("p", {}, `No ${entity.toLowerCase()} named "${name}" was found.`));
-  if (suggestions && suggestions.length > 0) {
-    div.appendChild(el("p", { className: "dim" }, "Did you mean?"));
-    const list = el("div", { className: "suggestions" });
-    for (const s of suggestions) {
-      const href = s.kind === "function" ? buildHash(`/functions/${enc(s.name)}`) : s.kind === "type" ? buildHash(`/types/${enc(s.name)}`) : s.kind === "enum" ? buildHash(`/constants/enum/${enc(s.name)}`) : buildHash(`/constants/${enc(s.name)}`);
-      const chip = el("span", { className: "suggestion-chip" }, el("a", { href, className: "xref" }, s.name));
-      chip.appendChild(el("span", { className: "dim" }, ` (${s.kind})`));
-      list.appendChild(chip);
-    }
-    div.appendChild(list);
-  }
-  div.appendChild(el("a", { href: backHref }, `← ${backLabel}`));
-  container.appendChild(div);
-  return false;
-}
-function collapsibleSection(title, ...children) {
-  const section = el("div", { className: "collapsible-section" });
-  const header = el("div", { className: "section-header" });
-  const arrow = el("span", { className: "section-arrow" }, "▼");
-  header.appendChild(arrow);
-  header.appendChild(el("h3", {}, title));
-  section.appendChild(header);
-  const body = el("div", { className: "section-body" });
-  for (const child of children) {
-    if (child)
-      body.appendChild(child);
-  }
-  section.appendChild(body);
-  header.addEventListener("click", () => {
-    body.classList.toggle("collapsed");
-    arrow.textContent = body.classList.contains("collapsed") ? "▶" : "▼";
-  });
-  return section;
-}
-function renderBreadcrumb(parts) {
-  const nav = el("nav", { className: "breadcrumb" });
-  parts.forEach((part, i) => {
-    if (i > 0) {
-      nav.appendChild(el("span", { className: "breadcrumb-sep" }, " › "));
-    }
-    if (part.href) {
-      nav.appendChild(el("a", { className: "breadcrumb-link", href: part.href }, part.label));
-    } else {
-      nav.appendChild(el("span", { className: "breadcrumb-current" }, part.label));
-    }
-  });
-  return nav;
-}
-function renderOutlinePanel(pageRoot) {
-  for (const old of Array.from(document.querySelectorAll(".outline-panel")))
-    old.remove();
-  const sections = Array.from(pageRoot.querySelectorAll(".collapsible-section"));
-  if (sections.length < 2)
-    return;
-  const panel = el("aside", { className: "outline-panel" });
-  panel.appendChild(el("div", { className: "outline-title" }, "OUTLINE"));
-  const list = el("ul", { className: "outline-list" });
-  sections.forEach((section, i) => {
-    const h3 = section.querySelector("h3");
-    if (!h3)
-      return;
-    const titleText = h3.textContent ?? `Section ${i + 1}`;
-    const id = `sec-${slugify(titleText)}-${i}`;
-    section.id = id;
-    const li = el("li", { className: "outline-item" });
-    const link = el("a", { href: "#", className: "outline-link" }, titleText);
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const body = section.querySelector(".section-body");
-      if (body?.classList.contains("collapsed")) {
-        section.querySelector(".section-header")?.click();
-      }
-      section.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    li.appendChild(link);
-    list.appendChild(li);
-  });
-  panel.appendChild(list);
-  document.body.appendChild(panel);
-}
-function slugify(s) {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-function withGutter(pre) {
-  const text = pre.textContent ?? "";
-  const lineCount = text.length === 0 ? 1 : text.split(`
-`).length;
-  const wrap = el("div", { className: "code-with-gutter" });
-  const gutter = el("pre", { className: "code-gutter mono" });
-  const nums = [];
-  for (let i = 1;i <= lineCount; i++)
-    nums.push(String(i));
-  gutter.textContent = nums.join(`
-`);
-  wrap.appendChild(gutter);
-  pre.classList.add("code-body");
-  wrap.appendChild(pre);
-  return wrap;
-}
-function renderPagination(container, currentPage, totalPages, onPage) {
-  clear(container);
-  if (totalPages <= 1)
-    return;
-  const nav = el("nav", { className: "pagination" });
-  const addBtn = (label, page, disabled, active = false) => {
-    const btn = el("button", {
-      className: `page-btn ${active ? "active" : ""} ${disabled ? "disabled" : ""}`.trim()
-    }, label);
-    if (!disabled && !active)
-      btn.addEventListener("click", () => onPage(page));
-    nav.appendChild(btn);
-  };
-  addBtn("«", 0, currentPage === 0);
-  addBtn("‹", currentPage - 1, currentPage === 0);
-  const windowSize = 3;
-  let start = Math.max(0, currentPage - windowSize);
-  let end = Math.min(totalPages - 1, currentPage + windowSize);
-  if (start > 0) {
-    addBtn("1", 0, false);
-    if (start > 1)
-      nav.appendChild(el("span", { className: "page-ellipsis" }, "…"));
-  }
-  for (let i = start;i <= end; i++) {
-    addBtn(String(i + 1), i, false, i === currentPage);
-  }
-  if (end < totalPages - 1) {
-    if (end < totalPages - 2)
-      nav.appendChild(el("span", { className: "page-ellipsis" }, "…"));
-    addBtn(String(totalPages), totalPages - 1, false);
-  }
-  addBtn("›", currentPage + 1, currentPage === totalPages - 1);
-  addBtn("»", totalPages - 1, currentPage === totalPages - 1);
-  container.appendChild(nav);
 }
 
 // src/views/functions.ts
@@ -4356,7 +4359,10 @@ async function init() {
   setupStatusBar();
   initClippy();
   setOnDatasetChange(() => refreshStatusCounts());
-  const path = (view, name) => updateStatusBar({ path: name ? `${view} / ${name}` : view });
+  const path = (view, name) => {
+    clearOutlinePanel();
+    updateStatusBar({ path: name ? `${view} / ${name}` : view });
+  };
   route("/", () => {
     setActiveNav("home");
     path("home");
