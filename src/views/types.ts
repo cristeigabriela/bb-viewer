@@ -300,8 +300,11 @@ function maxAlign(td: TypeDef): number {
  *  the bytes it actually occupies, against a faded full-width union bar. */
 function renderUnionOverlay(td: TypeDef): HTMLElement {
   const content = el("div", {});
-  const totalBytes = td.size ?? Math.max(...td.fields.map(f => f.size), 0);
-  if (!totalBytes || td.fields.length === 0) {
+  // Use the same dedup pass as field-table / C codegen so the overlay doesn't
+  // show synthetic <anonymous_N> sibling rows alongside their named twin.
+  const members = dedupAnonSiblings(td);
+  const totalBytes = td.size ?? Math.max(...members.map(f => f.size), 0);
+  if (!totalBytes || members.length === 0) {
     content.appendChild(el("p", { className: "dim" }, "No member overlay information available."));
     return content;
   }
@@ -317,15 +320,16 @@ function renderUnionOverlay(td: TypeDef): HTMLElement {
   }
   wrap.appendChild(scale);
 
-  td.fields.forEach((f, i) => {
+  members.forEach((f, i) => {
     const color = FIELD_COLORS[i % FIELD_COLORS.length];
     const row = el("div", { className: "union-overlay-row" });
     const track = el("div", { className: "union-overlay-track" });
+    const isAnon = f.is_anonymous || f.name.startsWith("<anonymous_");
     const bar = el("div", {
-      className: `union-overlay-bar${f.is_anonymous ? " union-overlay-anon" : ""}`,
+      className: `union-overlay-bar${isAnon ? " union-overlay-anon" : ""}`,
       style: `width:${(f.size / totalBytes) * 100}%;background:${color}`,
     });
-    bar.title = `${f.name}: ${f.size}B at 0x0`;
+    bar.title = `${isAnon ? "anon " + (f.anon_ref?.kind ?? "") : f.name}: ${f.size}B at 0x0`;
     track.appendChild(bar);
     if (f.size < totalBytes) {
       const pad = el("div", {
@@ -338,7 +342,7 @@ function renderUnionOverlay(td: TypeDef): HTMLElement {
     row.appendChild(track);
     const label = el("div", { className: "union-overlay-label mono" });
     label.appendChild(el("span", { className: "union-overlay-name bold", style: `color:${color}` },
-      f.is_anonymous ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name));
+      isAnon ? `(anon ${f.anon_ref?.kind ?? ""})` : f.name));
     label.appendChild(el("span", { className: "union-overlay-meta dim" }, ` ${f.size}B / ${totalBytes}B`));
     if (f.type) label.appendChild(el("span", { className: "union-overlay-type dim" }, ` ${f.type}`));
     row.appendChild(label);
@@ -347,12 +351,12 @@ function renderUnionOverlay(td: TypeDef): HTMLElement {
   content.appendChild(wrap);
 
   const stats = el("div", { className: "type-stats" });
-  const maxMember = Math.max(...td.fields.map(f => f.size), 0);
+  const maxMember = Math.max(...members.map(f => f.size), 0);
   stats.appendChild(el("span", {}, "Kind: union"));
-  stats.appendChild(el("span", {}, `Size: ${totalBytes}B (max of ${td.fields.length} members)`));
+  stats.appendChild(el("span", {}, `Size: ${totalBytes}B (max of ${members.length} members)`));
   stats.appendChild(el("span", {}, `Largest member: ${maxMember}B`));
-  if (td.fields.length > 0) {
-    stats.appendChild(el("span", {}, `Max align: ${Math.max(...td.fields.map(f => f.alignment), 1)}`));
+  if (members.length > 0) {
+    stats.appendChild(el("span", {}, `Max align: ${Math.max(...members.map(f => f.alignment), 1)}`));
   }
   content.appendChild(stats);
   return content;
