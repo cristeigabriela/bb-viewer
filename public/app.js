@@ -2810,6 +2810,31 @@ var FIELD_COLORS = [
   "#8b949e"
 ];
 var recordKind = (td) => td.kind ?? "struct";
+function dedupAnonSiblings(td) {
+  const namedLocs = new Set;
+  const loc = (a) => a ? `${a.location.file}:${a.location.line}:${a.location.column}` : null;
+  for (const f of td.fields) {
+    if (!f.anon_ref)
+      continue;
+    if (f.is_anonymous || f.name.startsWith("<anonymous_"))
+      continue;
+    const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+    const key = loc(anon);
+    if (key)
+      namedLocs.add(key);
+  }
+  if (namedLocs.size === 0)
+    return td.fields;
+  return td.fields.filter((f) => {
+    if (!f.anon_ref)
+      return true;
+    if (!f.is_anonymous && !f.name.startsWith("<anonymous_"))
+      return true;
+    const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+    const key = loc(anon);
+    return !key || !namedLocs.has(key);
+  });
+}
 function renderFieldTable(fields, opts) {
   const table = el("table", { className: "data-table field-table" });
   table.appendChild(el("thead", {}, el("tr", {}, el("th", {}, "Offset"), el("th", {}, "Bits"), el("th", {}, "Name"), el("th", {}, "Type"), el("th", {}, "Size"), el("th", {}, "Align"))));
@@ -2821,7 +2846,8 @@ function renderFieldTable(fields, opts) {
 function appendFieldRows(tbody, fields, opts) {
   const { parentKind, baseOffset, visited } = opts;
   let prevEnd = 0;
-  for (const f of fields) {
+  const visibleFields = dedupAnonSiblings({ name: opts.parentName, fields, location: { file: null, line: 0, column: 0 }, size: null });
+  for (const f of visibleFields) {
     if (parentKind === "struct" && f.offset > prevEnd) {
       const padding = f.offset - prevEnd;
       const padRow = el("tr", { className: "padding-row anon-child" });
@@ -2950,7 +2976,7 @@ function emitRecord(td, indent, asMember, baseOffset = 0, depth = 0, instanceNam
     lines.push(`typedef ${keyword} ${td.name} {`);
   }
   const inner = indent + "    ";
-  for (const f of td.fields) {
+  for (const f of dedupAnonSiblings(td)) {
     const absOffset = baseOffset + f.offset;
     if (f.anon_ref) {
       const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);

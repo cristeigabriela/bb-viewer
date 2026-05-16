@@ -18,6 +18,31 @@ const FIELD_COLORS = [
 
 const recordKind = (td: TypeDef): "struct" | "union" => td.kind ?? "struct";
 
+/** Drop synthetic `<anonymous_N>` fields whose underlying anon record is also
+ *  referenced by a NAMED field (e.g. `_LARGE_INTEGER` exposes both a sibling
+ *  anon record entry and the `u` variable that uses it — same physical struct
+ *  at the same file:line). Without this we render the same inline struct
+ *  twice. The named entry is preferred because it carries the variable name. */
+function dedupAnonSiblings(td: TypeDef): Field[] {
+  const namedLocs = new Set<string>();
+  const loc = (a: TypeDef | undefined) => a ? `${a.location.file}:${a.location.line}:${a.location.column}` : null;
+  for (const f of td.fields) {
+    if (!f.anon_ref) continue;
+    if (f.is_anonymous || f.name.startsWith("<anonymous_")) continue;
+    const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+    const key = loc(anon);
+    if (key) namedLocs.add(key);
+  }
+  if (namedLocs.size === 0) return td.fields;
+  return td.fields.filter(f => {
+    if (!f.anon_ref) return true;
+    if (!f.is_anonymous && !f.name.startsWith("<anonymous_")) return true;
+    const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+    const key = loc(anon);
+    return !key || !namedLocs.has(key);
+  });
+}
+
 /* ── Field table (struct/union/anon-aware) ──────────────────────────── */
 
 interface FieldTableOpts {
@@ -47,7 +72,10 @@ function appendFieldRows(tbody: HTMLElement, fields: Field[], opts: FieldTableOp
   const { parentKind, baseOffset, visited } = opts;
   let prevEnd = 0;
 
-  for (const f of fields) {
+  // De-dupe synthetic anon siblings when a named field references the same
+  // underlying record (DUMMYSTRUCTNAME / DUMMYUNIONNAME macro patterns).
+  const visibleFields = dedupAnonSiblings({ name: opts.parentName, fields, location: { file: null, line: 0, column: 0 }, size: null } as TypeDef);
+  for (const f of visibleFields) {
     // Padding only between siblings in a struct (union members overlap).
     if (parentKind === "struct" && f.offset > prevEnd) {
       const padding = f.offset - prevEnd;
@@ -205,7 +233,7 @@ function emitRecord(
   }
   const inner = indent + "    ";
 
-  for (const f of td.fields) {
+  for (const f of dedupAnonSiblings(td)) {
     const absOffset = baseOffset + f.offset;
     // Anonymous-typed members — recurse whether or not the variable has a name.
     // Unnamed members emit `struct {…};`, named members emit `struct {…} u;`.
