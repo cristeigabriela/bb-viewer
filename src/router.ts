@@ -46,11 +46,14 @@ function parseQuery(qs: string): Record<string, string> {
   return params;
 }
 
-let onDatasetChange: (() => void | Promise<void>) | null = null;
+const datasetChangeListeners: Array<() => void | Promise<void>> = [];
 
-export function setOnDatasetChange(cb: () => void | Promise<void>): void {
-  onDatasetChange = cb;
+export function onDatasetChange(cb: () => void | Promise<void>): void {
+  datasetChangeListeners.push(cb);
 }
+
+/** @deprecated use onDatasetChange — kept as alias to avoid silent overwrites. */
+export const setOnDatasetChange = onDatasetChange;
 
 export function startRouter(): void {
   // Global click interceptor: any <a href="#/..."> gets ds/arch injected
@@ -74,19 +77,27 @@ export function startRouter(): void {
     const [path, qs] = raw.split("?");
     const query = parseQuery(qs ?? "");
 
-    // URL is the single source of truth for dataset/arch/mode.
-    const effectiveDs = (query.ds ?? "winsdk") as "winsdk" | "phnt";
-    const effectiveArch = query.arch ?? "amd64";
-    const effectiveMode = (query.mode ?? "user") as "user" | "kernel";
+    // URL is the source of truth for dataset/arch/mode; missing params keep
+    // the current value rather than snapping back to the global default, so
+    // partially-specified URLs (e.g. a typed `?ds=phnt`) don't silently flip
+    // arch/mode away from what the user was just viewing.
+    const effectiveDs = (query.ds ?? getCurrentDataset()) as "winsdk" | "phnt";
+    const effectiveArch = query.arch ?? getCurrentArch();
+    const effectiveMode = (query.mode ?? getCurrentMode()) as "user" | "kernel";
     delete query.ds;
     delete query.arch;
     delete query.mode;
 
     if (effectiveDs !== getCurrentDataset() || effectiveArch !== getCurrentArch() || effectiveMode !== getCurrentMode()) {
-      await loadData(effectiveDs, effectiveArch, effectiveMode);
+      document.body.classList.add("loading-data");
+      try {
+        await loadData(effectiveDs, effectiveArch, effectiveMode);
+      } finally {
+        if (myId === dispatchId) document.body.classList.remove("loading-data");
+      }
       // If another dispatch started while we were loading, bail — it wins
       if (myId !== dispatchId) return;
-      if (onDatasetChange) await onDatasetChange();
+      for (const cb of datasetChangeListeners) await cb();
     }
 
     // Ensure ds/arch/mode are always in the URL (after loadData so state is current)

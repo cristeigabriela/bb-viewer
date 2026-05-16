@@ -592,10 +592,11 @@ function parseQuery(qs) {
     params[k] = v;
   return params;
 }
-var onDatasetChange = null;
-function setOnDatasetChange(cb) {
-  onDatasetChange = cb;
+var datasetChangeListeners = [];
+function onDatasetChange(cb) {
+  datasetChangeListeners.push(cb);
 }
+var setOnDatasetChange = onDatasetChange;
 function startRouter() {
   document.addEventListener("click", (e) => {
     const anchor = e.target.closest?.("a[href^='#/']");
@@ -614,18 +615,24 @@ function startRouter() {
     const raw = window.location.hash.slice(1) || "/";
     const [path, qs] = raw.split("?");
     const query = parseQuery(qs ?? "");
-    const effectiveDs = query.ds ?? "winsdk";
-    const effectiveArch = query.arch ?? "amd64";
-    const effectiveMode = query.mode ?? "user";
+    const effectiveDs = query.ds ?? getCurrentDataset();
+    const effectiveArch = query.arch ?? getCurrentArch();
+    const effectiveMode = query.mode ?? getCurrentMode();
     delete query.ds;
     delete query.arch;
     delete query.mode;
     if (effectiveDs !== getCurrentDataset() || effectiveArch !== getCurrentArch() || effectiveMode !== getCurrentMode()) {
-      await loadData(effectiveDs, effectiveArch, effectiveMode);
+      document.body.classList.add("loading-data");
+      try {
+        await loadData(effectiveDs, effectiveArch, effectiveMode);
+      } finally {
+        if (myId === dispatchId)
+          document.body.classList.remove("loading-data");
+      }
       if (myId !== dispatchId)
         return;
-      if (onDatasetChange)
-        await onDatasetChange();
+      for (const cb of datasetChangeListeners)
+        await cb();
     }
     if (!qs || !qs.includes("ds=") || !qs.includes("arch=") || !qs.includes("mode=")) {
       history.replaceState(null, "", "#" + injectContext(raw));
