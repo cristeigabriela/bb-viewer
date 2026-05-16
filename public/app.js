@@ -2865,45 +2865,40 @@ function appendFieldRows(tbody, fields, opts) {
       const isUnnamed = f.is_anonymous || f.name.startsWith("<anonymous_");
       if (anon) {
         const anonKind = recordKind(anon);
-        const groupId = `anon-${anon.enclosing_record ?? "?"}-${(anon.field_path ?? []).join("-")}-${Math.random().toString(36).slice(2, 7)}`;
-        const headerRow = el("tr", { className: "anon-row anon-header", "data-anon-id": groupId });
-        const arrow = el("span", { className: "collapse-arrow" }, "▶");
-        headerRow.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
-        headerRow.appendChild(el("td", {}));
-        const nameTd = el("td", { className: `anon-toggle-cell${isUnnamed ? " dim italic" : " mono bold"}` });
-        nameTd.appendChild(arrow);
-        nameTd.appendChild(document.createTextNode(isUnnamed ? " anon" : ` ${f.name}`));
-        headerRow.appendChild(nameTd);
+        const tr = el("tr", {});
+        tr.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
+        tr.appendChild(el("td", {}));
+        tr.appendChild(el("td", { className: `field-name-col${isUnnamed ? " dim italic" : " mono bold"}` }, isUnnamed ? "(anon)" : f.name));
         const typeTd = el("td", { className: "mono italic dim" });
         typeTd.appendChild(document.createTextNode(`(anonymous ${anonKind}, ${anon.fields.length} fields)`));
-        headerRow.appendChild(typeTd);
-        headerRow.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
-        headerRow.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
-        headerRow.style.cursor = "pointer";
-        tbody.appendChild(headerRow);
-        const childRows = [];
-        const childrenTbody = tbody;
-        const startLength = childrenTbody.childNodes.length;
-        appendFieldRows(childrenTbody, anon.fields, {
+        tr.appendChild(typeTd);
+        tr.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
+        tr.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
+        tbody.appendChild(tr);
+        const expRow = el("tr", { className: "nested-expansion-row" });
+        const td = el("td", {});
+        td.setAttribute("colspan", "6");
+        const toggle = el("div", { className: "nested-toggle" });
+        const arrow = el("span", { className: "collapse-arrow" }, "▶");
+        toggle.appendChild(arrow);
+        const labelText = isUnnamed ? `(anonymous ${anonKind})` : `${f.name}: (anonymous ${anonKind})`;
+        toggle.appendChild(el("span", { className: "mono italic" }, labelText));
+        toggle.appendChild(el("span", { className: "dim" }, ` (${anon.size ?? "?"}B, ${anon.fields.length} fields, ${anonKind})`));
+        const nestedBody = el("div", { className: "nested-body collapsed" });
+        nestedBody.appendChild(renderFieldTable(anon.fields, {
           parentName: opts.parentName,
           parentKind: anonKind,
           baseOffset: absoluteOffset,
           visited
+        }));
+        toggle.addEventListener("click", () => {
+          nestedBody.classList.toggle("collapsed");
+          arrow.textContent = nestedBody.classList.contains("collapsed") ? "▶" : "▼";
         });
-        for (let i = startLength;i < childrenTbody.childNodes.length; i++) {
-          const child = childrenTbody.childNodes[i];
-          if (child.classList)
-            child.classList.add("anon-child", `anon-child-${groupId}`);
-          childRows.push(child);
-        }
-        for (const r of childRows)
-          r.style.display = "none";
-        headerRow.addEventListener("click", () => {
-          const collapsed = childRows[0]?.style.display === "none";
-          for (const r of childRows)
-            r.style.display = collapsed ? "" : "none";
-          arrow.textContent = collapsed ? "▼" : "▶";
-        });
+        td.appendChild(toggle);
+        td.appendChild(nestedBody);
+        expRow.appendChild(td);
+        tbody.appendChild(expRow);
       } else {
         const errRow = el("tr", { className: "anon-row" });
         errRow.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
