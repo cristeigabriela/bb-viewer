@@ -31,6 +31,10 @@
         <button class="dataset-btn" data-dataset="phnt">PHNT</button>
       </div>
       <div class="arch-switcher"></div>
+      <div class="mode-switcher">
+        <button class="mode-btn active" data-mode="user">User</button>
+        <button class="mode-btn" data-mode="kernel">Kernel</button>
+      </div>
       <div class="theme-controls">
         <div class="accent-picker" title="Accent color">
           <button class="accent-swatch active" data-accent="amber" style="background:#ffb000"></button>
@@ -49,6 +53,19 @@
       </div>
     </nav>
     <main id="content"></main>
+    <footer id="status-bar" class="status-bar">
+      <div class="sb-left">
+        <span class="sb-cell sb-ds">winsdk</span>
+        <span class="sb-cell sb-arch">amd64</span>
+        <span class="sb-cell sb-mode">user</span>
+      </div>
+      <div class="sb-middle">
+        <span class="sb-cell sb-path"></span>
+      </div>
+      <div class="sb-right">
+        <span class="sb-cell sb-counts"></span>
+      </div>
+    </footer>
   </div>
 
   <script src="app.js"></script>

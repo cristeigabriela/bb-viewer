@@ -4,7 +4,8 @@
   "scripts": {
     "build": "bun run build.ts",
     "build:graph": "bun run build-graph.ts",
-    "dev": "bun run serve.ts"
+    "dev": "bun run serve.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "d3-force": "^3.0.0"

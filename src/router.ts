@@ -1,4 +1,4 @@
-import { getCurrentDataset, getCurrentArch, loadData } from "./data";
+import { getCurrentDataset, getCurrentArch, getCurrentMode, loadData } from "./data";
 
 type RouteHandler = (params: Record<string, string>, query: Record<string, string>) => void;
 
@@ -19,12 +19,13 @@ export function route(pattern: string, handler: RouteHandler): void {
   routes.push({ pattern: new RegExp("^" + regexStr + "$"), keys, handler });
 }
 
-/** Inject current ds/arch into a hash-query string. Always present. */
+/** Inject current ds/arch/mode into a hash-query string. Always present. */
 function injectContext(raw: string): string {
   const [path, qs] = raw.split("?");
   const params = new URLSearchParams(qs ?? "");
   if (!params.has("ds")) params.set("ds", getCurrentDataset());
   if (!params.has("arch")) params.set("arch", getCurrentArch());
+  if (!params.has("mode")) params.set("mode", getCurrentMode());
   return `${path}?${params}`;
 }
 
@@ -73,21 +74,23 @@ export function startRouter(): void {
     const [path, qs] = raw.split("?");
     const query = parseQuery(qs ?? "");
 
-    // URL is the single source of truth for dataset/arch.
+    // URL is the single source of truth for dataset/arch/mode.
     const effectiveDs = (query.ds ?? "winsdk") as "winsdk" | "phnt";
     const effectiveArch = query.arch ?? "amd64";
+    const effectiveMode = (query.mode ?? "user") as "user" | "kernel";
     delete query.ds;
     delete query.arch;
+    delete query.mode;
 
-    if (effectiveDs !== getCurrentDataset() || effectiveArch !== getCurrentArch()) {
-      await loadData(effectiveDs, effectiveArch);
+    if (effectiveDs !== getCurrentDataset() || effectiveArch !== getCurrentArch() || effectiveMode !== getCurrentMode()) {
+      await loadData(effectiveDs, effectiveArch, effectiveMode);
       // If another dispatch started while we were loading, bail — it wins
       if (myId !== dispatchId) return;
       if (onDatasetChange) await onDatasetChange();
     }
 
-    // Ensure ds/arch are always in the URL (after loadData so state is current)
-    if (!qs || !qs.includes("ds=") || !qs.includes("arch=")) {
+    // Ensure ds/arch/mode are always in the URL (after loadData so state is current)
+    if (!qs || !qs.includes("ds=") || !qs.includes("arch=") || !qs.includes("mode=")) {
       history.replaceState(null, "", "#" + injectContext(raw));
     }
 

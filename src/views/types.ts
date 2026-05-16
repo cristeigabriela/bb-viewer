@@ -1,12 +1,12 @@
-import { getTypes, findType, flexFindType, findSimilarNames, getXRef, getAllHeaders } from "../data";
+import { getTypes, getTypedefs, findType, findTypedef, findAnon, findEnum, resolveTypeOrTypedef, findSimilarNames, getXRef, getAllHeaders } from "../data";
 import { navigate } from "../router";
 import { el, clear } from "../dom";
 import { matchQuery } from "../utils";
-import { typeLink, funcLink, renderTypeStr, headerLink, badge, highlightCode } from "../ui/links";
+import { typeLink, funcLink, enumLink, renderTypeStr, headerLink, badge, highlightCode } from "../ui/links";
 import { buildHash } from "../router";
 import { buildFilterDropdown, FilterDropdownHandle } from "../ui/filter-dropdown";
-import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl } from "./shared";
-import type { TypeDef, Field } from "../types";
+import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl, renderBreadcrumb, renderOutlinePanel, withGutter } from "./shared";
+import type { TypeDef, Field, Typedef } from "../types";
 
 const PAGE_SIZE = 50;
 
@@ -16,66 +16,300 @@ const FIELD_COLORS = [
   "#bc8cff", "#ffd33d", "#ff9a8b", "#6cb6ff", "#8b949e",
 ];
 
-function renderFieldTable(fields: Field[], parentName?: string, visited: Set<string> = new Set()): HTMLElement {
-  const table = el("table", { className: "data-table field-table" });
+const recordKind = (td: TypeDef): "struct" | "union" => td.kind ?? "struct";
+
+/** Drop synthetic `<anonymous_N>` fields whose underlying anon record is also
+ *  referenced by a NAMED field (e.g. `_LARGE_INTEGER` exposes both a sibling
+ *  anon record entry and the `u` variable that uses it — same physical struct
+ *  at the same file:line). Without this we render the same inline struct
+ *  twice. The named entry is preferred because it carries the variable name. */
+function dedupAnonSiblings(td: TypeDef): Field[] {
+  const namedLocs = new Set<string>();
+  const loc = (a: TypeDef | undefined) => a ? `${a.location.file}:${a.location.line}:${a.location.column}` : null;
+  for (const f of td.fields) {
+    if (!f.anon_ref) continue;
+    if (f.is_anonymous || f.name.startsWith("<anonymous_")) continue;
+    const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+    const key = loc(anon);
+    if (key) namedLocs.add(key);
+  }
+  if (namedLocs.size === 0) return td.fields;
+  return td.fields.filter(f => {
+    if (!f.anon_ref) return true;
+    if (!f.is_anonymous && !f.name.startsWith("<anonymous_")) return true;
+    const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+    const key = loc(anon);
+    return !key || !namedLocs.has(key);
+  });
+}
+
+/* ── Field table (struct/union/anon-aware) ──────────────────────────── */
+
+interface FieldTableOpts {
+  parentName: string;
+  parentKind: "struct" | "union";
+  /** Absolute offset of this scope inside the outermost record (for anon nesting). */
+  baseOffset: number;
+  /** Set of NAMED records visited so far (cycle guard). */
+  visited: Set<string>;
+  /** Nesting depth (0 = outermost). Drives the file-tree-style indent on the
+   *  Name column via a `--depth` CSS custom property. */
+  depth?: number;
+}
+
+function renderFieldTable(fields: Field[], opts: FieldTableOpts): HTMLElement {
+  const depth = opts.depth ?? 0;
+  const table = el("table", { className: "data-table field-table", style: `--depth:${depth}` });
+  // colgroup so nested .field-tables (inside .nested-body) align column-for-
+  // column with the outer table. Combined with `table-layout: fixed` (in CSS)
+  // this gives perfect column alignment across any depth of expansion.
+  const cg = el("colgroup", {});
+  for (const c of ["col-offset", "col-bits", "col-name", "col-type", "col-size", "col-align"]) {
+    cg.appendChild(el("col", { className: c }));
+  }
+  table.appendChild(cg);
   table.appendChild(el("thead", {},
     el("tr", {},
       el("th", {}, "Offset"), el("th", {}, "Bits"), el("th", {}, "Name"),
-      el("th", {}, "Type"), el("th", {}, "Size"), el("th", {}, "Align"), el("th", {}, "Pad"),
+      el("th", {}, "Type"), el("th", {}, "Size"), el("th", {}, "Align"),
     )
   ));
   const tbody = el("tbody", {});
-  let prevEnd = 0;
-  for (const f of fields) {
-    const padding = f.offset - prevEnd;
-    if (padding > 0) {
-      const padRow = el("tr", { className: "padding-row" });
-      padRow.appendChild(el("td", { className: "mono dim" }, `0x${prevEnd.toString(16).toUpperCase()}`));
-      padRow.appendChild(el("td", {})); padRow.appendChild(el("td", { className: "dim" }, `[padding]`));
-      padRow.appendChild(el("td", {})); padRow.appendChild(el("td", { className: "mono dim" }, `${padding}`));
-      padRow.appendChild(el("td", {})); padRow.appendChild(el("td", { className: "mono padding-size" }, `${padding}B`));
-      tbody.appendChild(padRow);
-    }
-    const tr = el("tr", {});
-    tr.appendChild(el("td", { className: "mono offset-col" }, `0x${f.offset.toString(16).toUpperCase()}`));
-    tr.appendChild(el("td", { className: "mono dim" }, f.offset_bits % 8 !== 0 ? `+${f.offset_bits % 8}b` : ""));
-    tr.appendChild(el("td", { className: "mono bold field-name-col" }, f.name));
-    const typeTd = el("td", { className: "mono" });
-    typeTd.appendChild(renderTypeStr(f.type ?? "(anonymous)", f.underlying_type));
-    tr.appendChild(typeTd);
-    tr.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
-    tr.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
-    tr.appendChild(el("td", {}));
-    tbody.appendChild(tr);
-    prevEnd = f.offset + f.size;
-
-    // Inline nested type expansion (using underlying_type from bb)
-    const ut = f.underlying_type;
-    if (ut && ut !== parentName && !visited.has(ut)) {
-      const nested = findType(ut);
-      if (nested && nested.fields.length > 0) {
-        const expRow = el("tr", { className: "nested-expansion-row" });
-        const td = el("td", {}); td.setAttribute("colspan", "7");
-        const toggle = el("div", { className: "nested-toggle" });
-        const arrow = el("span", { className: "collapse-arrow" }, "\u25b6");
-        toggle.appendChild(arrow);
-        toggle.appendChild(typeLink(ut));
-        toggle.appendChild(el("span", { className: "dim" }, ` (${nested.size ?? "?"}B, ${nested.fields.length} fields)`));
-        const childVisited = new Set(visited); childVisited.add(ut);
-        const nestedBody = el("div", { className: "nested-body collapsed" });
-        nestedBody.appendChild(renderFieldTable(nested.fields, ut, childVisited));
-        toggle.addEventListener("click", () => {
-          nestedBody.classList.toggle("collapsed");
-          arrow.textContent = nestedBody.classList.contains("collapsed") ? "\u25b6" : "\u25bc";
-        });
-        td.appendChild(toggle); td.appendChild(nestedBody);
-        expRow.appendChild(td); tbody.appendChild(expRow);
-      }
-    }
-  }
+  appendFieldRows(tbody, fields, opts);
   table.appendChild(tbody);
   return table;
 }
+
+function appendFieldRows(tbody: HTMLElement, fields: Field[], opts: FieldTableOpts): void {
+  const { parentKind, baseOffset, visited } = opts;
+  let prevEnd = 0;
+
+  // De-dupe synthetic anon siblings when a named field references the same
+  // underlying record (DUMMYSTRUCTNAME / DUMMYUNIONNAME macro patterns).
+  const visibleFields = dedupAnonSiblings({ name: opts.parentName, fields, location: { file: null, line: 0, column: 0 }, size: null } as TypeDef);
+  for (const f of visibleFields) {
+    // Padding only between siblings in a struct (union members overlap).
+    if (parentKind === "struct" && f.offset > prevEnd) {
+      const padding = f.offset - prevEnd;
+      const padRow = el("tr", { className: "padding-row anon-child" });
+      padRow.appendChild(el("td", { className: "mono dim" }, `0x${(baseOffset + prevEnd).toString(16).toUpperCase()}`));
+      padRow.appendChild(el("td", {}));
+      padRow.appendChild(el("td", { className: "dim" }, "[padding]"));
+      padRow.appendChild(el("td", {}));
+      padRow.appendChild(el("td", { className: "mono dim" }, `${padding}`));
+      padRow.appendChild(el("td", {}));
+      tbody.appendChild(padRow);
+    }
+
+    const absoluteOffset = baseOffset + f.offset;
+
+    // `anon_ref` (with no `is_anonymous`) covers NAMED anonymous-typed members
+    // like `union { ... } u` in _LARGE_INTEGER. We still inline-expand them,
+    // but preserve the variable name (e.g. "u") in the toggle row.
+    if (f.anon_ref) {
+      const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      const isUnnamed = f.is_anonymous || f.name.startsWith("<anonymous_");
+      if (anon) {
+        const anonKind = recordKind(anon);
+        // Regular field row, same shape as a real field. No toggle here —
+        // the toggle lives on the expansion row beneath, matching the
+        // named-record nested-expansion-row pattern.
+        const tr = el("tr", {});
+        tr.appendChild(el("td", { className: "mono offset-col" },
+          `0x${absoluteOffset.toString(16).toUpperCase()}`));
+        tr.appendChild(el("td", {}));
+        tr.appendChild(el("td", { className: `field-name-col${isUnnamed ? " dim italic" : " mono bold"}` },
+          isUnnamed ? "(anon)" : f.name));
+        const typeTd = el("td", { className: "mono italic dim" });
+        typeTd.appendChild(document.createTextNode(`(anonymous ${anonKind}, ${anon.fields.length} fields)`));
+        tr.appendChild(typeTd);
+        tr.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
+        tr.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
+        tbody.appendChild(tr);
+
+        // Expansion row: same `nested-expansion-row` pattern as named-record
+        // expansion, so a union-typed anon and a struct-typed anon and a
+        // named struct/union all render the same way.
+        const expRow = el("tr", { className: "nested-expansion-row" });
+        const td = el("td", {}); td.setAttribute("colspan", "6");
+        const toggle = el("div", { className: "nested-toggle" });
+        const arrow = el("span", { className: "collapse-arrow" }, "▶");
+        toggle.appendChild(arrow);
+        const labelText = isUnnamed
+          ? `(anonymous ${anonKind})`
+          : `${f.name}: (anonymous ${anonKind})`;
+        toggle.appendChild(el("span", { className: "mono italic" }, labelText));
+        toggle.appendChild(el("span", { className: "dim" },
+          ` (${anon.size ?? "?"}B, ${anon.fields.length} fields, ${anonKind})`));
+        const nestedBody = el("div", { className: "nested-body collapsed" });
+        nestedBody.appendChild(renderFieldTable(anon.fields, {
+          parentName: opts.parentName,
+          parentKind: anonKind,
+          baseOffset: absoluteOffset,
+          visited,
+          depth: (opts.depth ?? 0) + 1,
+        }));
+        toggle.addEventListener("click", () => {
+          nestedBody.classList.toggle("collapsed");
+          arrow.textContent = nestedBody.classList.contains("collapsed") ? "▶" : "▼";
+        });
+        td.appendChild(toggle); td.appendChild(nestedBody);
+        expRow.appendChild(td); tbody.appendChild(expRow);
+      } else {
+        const errRow = el("tr", { className: "anon-row" });
+        errRow.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
+        errRow.appendChild(el("td", {}));
+        errRow.appendChild(el("td", { className: isUnnamed ? "dim italic" : "mono bold" },
+          isUnnamed ? "anonymous (unresolved)" : `${f.name} (unresolved anon)`));
+        errRow.appendChild(el("td", {}));
+        errRow.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
+        errRow.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
+        tbody.appendChild(errRow);
+      }
+    } else {
+      const tr = el("tr", {});
+      tr.appendChild(el("td", { className: "mono offset-col" }, `0x${absoluteOffset.toString(16).toUpperCase()}`));
+      tr.appendChild(el("td", { className: "mono dim" }, f.offset_bits % 8 !== 0 ? `+${f.offset_bits % 8}b` : ""));
+      tr.appendChild(el("td", { className: "mono bold field-name-col" }, f.name));
+      const typeTd = el("td", { className: "mono" });
+      typeTd.appendChild(renderTypeStr(f.type, f.underlying_type ?? f.underlying_record));
+      tr.appendChild(typeTd);
+      tr.appendChild(el("td", { className: "mono size-col" }, `${f.size}`));
+      tr.appendChild(el("td", { className: "mono dim" }, `${f.alignment}`));
+      tbody.appendChild(tr);
+
+      // Inline nested expansion for named records (existing behavior, scoped to underlying_record).
+      const recordName = f.underlying_record;
+      if (recordName && recordName !== opts.parentName && !visited.has(recordName)) {
+        const nested = findType(recordName);
+        if (nested && nested.fields.length > 0) {
+          const expRow = el("tr", { className: "nested-expansion-row" });
+          const td = el("td", {}); td.setAttribute("colspan", "6");
+          const toggle = el("div", { className: "nested-toggle" });
+          const arrow = el("span", { className: "collapse-arrow" }, "▶");
+          toggle.appendChild(arrow);
+          toggle.appendChild(typeLink(recordName));
+          toggle.appendChild(el("span", { className: "dim" },
+            ` (${nested.size ?? "?"}B, ${nested.fields.length} fields, ${recordKind(nested)})`));
+          const childVisited = new Set(visited); childVisited.add(recordName);
+          const nestedBody = el("div", { className: "nested-body collapsed" });
+          nestedBody.appendChild(renderFieldTable(nested.fields, {
+            parentName: recordName, parentKind: recordKind(nested),
+            baseOffset: 0, visited: childVisited,
+            depth: (opts.depth ?? 0) + 1,
+          }));
+          toggle.addEventListener("click", () => {
+            nestedBody.classList.toggle("collapsed");
+            arrow.textContent = nestedBody.classList.contains("collapsed") ? "▶" : "▼";
+          });
+          td.appendChild(toggle); td.appendChild(nestedBody);
+          expRow.appendChild(td); tbody.appendChild(expRow);
+        }
+      }
+    }
+
+    // Advance the running end-offset. Unions overlap → use max, not sum.
+    if (parentKind === "union") {
+      prevEnd = Math.max(prevEnd, f.offset + f.size);
+    } else {
+      prevEnd = f.offset + f.size;
+    }
+  }
+}
+
+/* ── Recursive C-definition codegen ─────────────────────────────────── */
+
+/**
+ * Field offset comments always show the field's absolute byte offset within the
+ * outermost (top-level) record, regardless of how many anonymous union/struct
+ * wrappings sit between the field and the outer record. The `baseOffset`
+ * accumulator propagates downward through recursion.
+ */
+
+function fmtAbsOffset(n: number): string {
+  return `0x${n.toString(16).toUpperCase().padStart(4, "0")}`;
+}
+
+function emitRecord(
+  td: TypeDef,
+  indent: string,
+  asMember: boolean,
+  baseOffset: number = 0,
+  depth: number = 0,
+  /** Member variable name for a NAMED anonymous-typed member (e.g. `u` in
+   *  `union { ... } u`). Unnamed members pass undefined. */
+  instanceName?: string,
+): string[] {
+  const lines: string[] = [];
+  const keyword = recordKind(td) === "union" ? "union" : "struct";
+
+  if (asMember) {
+    lines.push(`${indent}${keyword} {`);
+  } else {
+    lines.push(`typedef ${keyword} ${td.name} {`);
+  }
+  const inner = indent + "    ";
+
+  for (const f of dedupAnonSiblings(td)) {
+    const absOffset = baseOffset + f.offset;
+    // Anonymous-typed members — recurse whether or not the variable has a name.
+    // Unnamed members emit `struct {…};`, named members emit `struct {…} u;`.
+    if (f.anon_ref) {
+      const anon = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      const isUnnamed = f.is_anonymous || f.name.startsWith("<anonymous_");
+      if (anon) {
+        const inst = isUnnamed ? undefined : f.name;
+        for (const ln of emitRecord(anon, inner, true, absOffset, depth + 1, inst)) lines.push(ln);
+      } else {
+        lines.push(`${inner}/* unresolved anonymous ${f.anon_ref.kind}${isUnnamed ? "" : " " + f.name} */`);
+      }
+    } else {
+      let typeStr = f.type ?? "?";
+      let nameStr = f.name;
+      if (f.is_array && f.array_size != null) {
+        typeStr = typeStr.replace(/\[\d+\]$/, "");
+        nameStr = `${f.name}[${f.array_size}]`;
+      }
+      // Inside an anonymous wrapper, show `abs | relative` so you can read both
+      // the field's true position in the outer record and its position within
+      // its immediate (anonymous) parent.
+      const offComment = depth === 0
+        ? fmtAbsOffset(absOffset)
+        : `${fmtAbsOffset(absOffset)} | ${fmtAbsOffset(f.offset)}`;
+      lines.push(`${inner}/* ${offComment} */  ${typeStr} ${nameStr};  /* size: ${f.size}, align: ${f.alignment} */`);
+    }
+  }
+
+  if (asMember) {
+    let suffix = `${indent}}${instanceName ? ` ${instanceName}` : ""};`;
+    if (td.size != null) suffix += `  /* size: ${td.size}, align: ${maxAlign(td)} */`;
+    lines.push(suffix);
+  } else {
+    const nameTrim = td.name.startsWith("_") ? td.name.slice(1) : td.name;
+    let suffix = `} ${nameTrim}, *P${nameTrim};`;
+    if (td.size != null) suffix += `  /* total size: 0x${td.size.toString(16).toUpperCase()} (${td.size}) */`;
+    lines.push(`${indent}${suffix}`);
+  }
+
+  return lines;
+}
+
+function maxAlign(td: TypeDef): number {
+  let m = 1;
+  for (const f of td.fields) {
+    if (f.alignment > m) m = f.alignment;
+    if (f.is_anonymous && f.anon_ref) {
+      const a = findAnon(f.anon_ref.enclosing_record, f.anon_ref.field_path);
+      if (a) {
+        const am = maxAlign(a);
+        if (am > m) m = am;
+      }
+    }
+  }
+  return m;
+}
+
+/* ── Memory layout viz ──────────────────────────────────────────────── */
 
 function renderMemoryLayout(td: TypeDef): HTMLElement {
   const content = el("div", {});
@@ -83,9 +317,10 @@ function renderMemoryLayout(td: TypeDef): HTMLElement {
     content.appendChild(el("p", { className: "dim" }, "No layout information available."));
     return content;
   }
+  const kind = recordKind(td);
   const totalBytes = td.size;
   const gridContainer = el("div", { className: "layout-grid-container" });
-  const visual = el("div", { className: "layout-visual" });
+  const visual = el("div", { className: `layout-visual layout-${kind}` });
   const scaleBar = el("div", { className: "layout-scale" });
   const markerCount = Math.min(8, totalBytes);
   const step = Math.ceil(totalBytes / markerCount);
@@ -95,60 +330,93 @@ function renderMemoryLayout(td: TypeDef): HTMLElement {
       `0x${offset.toString(16).toUpperCase()}`));
   }
   visual.appendChild(scaleBar);
+
   let prevEnd = 0;
   td.fields.forEach((f, i) => {
-    if (f.offset > prevEnd) {
-      const padBar = el("div", { className: "layout-bar-item layout-padding",
-        style: `left:${(prevEnd / totalBytes) * 100}%;width:${Math.max(((f.offset - prevEnd) / totalBytes) * 100, 0.5)}%` });
+    // For struct, draw padding gaps. For union, every field starts at 0 so no padding.
+    if (kind === "struct" && f.offset > prevEnd) {
+      const padBar = el("div", {
+        className: "layout-bar-item layout-padding",
+        style: `left:${(prevEnd / totalBytes) * 100}%;width:${Math.max(((f.offset - prevEnd) / totalBytes) * 100, 0.5)}%`,
+      });
       padBar.title = `Padding: ${f.offset - prevEnd} bytes at 0x${prevEnd.toString(16).toUpperCase()}`;
       visual.appendChild(padBar);
     }
     const color = FIELD_COLORS[i % FIELD_COLORS.length];
-    const bar = el("div", { className: "layout-bar-item",
-      style: `left:${(f.offset / totalBytes) * 100}%;width:${Math.max((f.size / totalBytes) * 100, 0.5)}%;background:${color}` });
-    bar.title = `${f.name}: ${f.type ?? "?"} (${f.size}B at 0x${f.offset.toString(16).toUpperCase()})`;
+    const isAnon = f.is_anonymous;
+    const bar = el("div", {
+      className: `layout-bar-item${isAnon ? " layout-anon" : ""}`,
+      style: `left:${(f.offset / totalBytes) * 100}%;width:${Math.max((f.size / totalBytes) * 100, 0.5)}%;background:${color}`,
+    });
+    bar.title = `${f.name}: ${f.type ?? "(anonymous)"} (${f.size}B at 0x${f.offset.toString(16).toUpperCase()})`;
     visual.appendChild(bar);
-    prevEnd = f.offset + f.size;
+    prevEnd = kind === "union" ? Math.max(prevEnd, f.offset + f.size) : f.offset + f.size;
   });
-  if (prevEnd < totalBytes) {
-    const padBar = el("div", { className: "layout-bar-item layout-padding",
-      style: `left:${(prevEnd / totalBytes) * 100}%;width:${Math.max(((totalBytes - prevEnd) / totalBytes) * 100, 0.5)}%` });
+  if (kind === "struct" && prevEnd < totalBytes) {
+    const padBar = el("div", {
+      className: "layout-bar-item layout-padding",
+      style: `left:${(prevEnd / totalBytes) * 100}%;width:${Math.max(((totalBytes - prevEnd) / totalBytes) * 100, 0.5)}%`,
+    });
     padBar.title = `Tail padding: ${totalBytes - prevEnd} bytes`;
     visual.appendChild(padBar);
   }
   gridContainer.appendChild(visual);
-  // Legend
+
   const legend = el("div", { className: "layout-legend" });
   td.fields.forEach((f, i) => {
     const color = FIELD_COLORS[i % FIELD_COLORS.length];
     const item = el("div", { className: "legend-item" });
     item.appendChild(el("span", { className: "legend-swatch", style: `background:${color}` }));
     item.appendChild(el("span", { className: "legend-label mono" }, f.name));
-    item.appendChild(el("span", { className: "legend-info dim" }, `${f.size}B @ 0x${f.offset.toString(16).toUpperCase()}`));
+    item.appendChild(el("span", { className: "legend-info dim" },
+      `${f.size}B @ 0x${f.offset.toString(16).toUpperCase()}`));
     legend.appendChild(item);
   });
-  let totalPadding = 0, pEnd = 0;
-  for (const f of td.fields) { if (f.offset > pEnd) totalPadding += f.offset - pEnd; pEnd = f.offset + f.size; }
-  if (pEnd < totalBytes) totalPadding += totalBytes - pEnd;
+  let totalPadding = 0;
+  if (kind === "struct") {
+    let pEnd = 0;
+    for (const f of td.fields) {
+      if (f.offset > pEnd) totalPadding += f.offset - pEnd;
+      pEnd = f.offset + f.size;
+    }
+    if (pEnd < totalBytes) totalPadding += totalBytes - pEnd;
+  }
   if (totalPadding > 0) {
     const item = el("div", { className: "legend-item" });
-    item.appendChild(el("span", { className: "legend-swatch", style: "background:repeating-linear-gradient(45deg,#30363d,#30363d 2px,transparent 2px,transparent 4px)" }));
+    item.appendChild(el("span", {
+      className: "legend-swatch",
+      style: "background:repeating-linear-gradient(45deg,#30363d,#30363d 2px,transparent 2px,transparent 4px)",
+    }));
     item.appendChild(el("span", { className: "legend-label dim" }, "padding"));
-    item.appendChild(el("span", { className: "legend-info dim" }, `${totalPadding}B (${((totalPadding / totalBytes) * 100).toFixed(1)}%)`));
+    item.appendChild(el("span", { className: "legend-info dim" },
+      `${totalPadding}B (${((totalPadding / totalBytes) * 100).toFixed(1)}%)`));
     legend.appendChild(item);
   }
   gridContainer.appendChild(legend);
   content.appendChild(gridContainer);
+
   const stats = el("div", { className: "type-stats" });
   const dataBytes = td.fields.reduce((s, f) => s + f.size, 0);
+  stats.appendChild(el("span", {}, `Kind: ${kind}`));
   stats.appendChild(el("span", {}, `Total: ${totalBytes}B`));
-  stats.appendChild(el("span", {}, `Data: ${dataBytes}B`));
-  stats.appendChild(el("span", {}, `Padding: ${totalPadding}B (${((totalPadding / totalBytes) * 100).toFixed(1)}%)`));
+  if (kind === "struct") {
+    stats.appendChild(el("span", {}, `Data: ${dataBytes}B`));
+    stats.appendChild(el("span", {}, `Padding: ${totalPadding}B (${((totalPadding / totalBytes) * 100).toFixed(1)}%)`));
+  } else {
+    const maxMember = Math.max(...td.fields.map(f => f.size), 0);
+    stats.appendChild(el("span", {}, `Largest member: ${maxMember}B`));
+  }
   stats.appendChild(el("span", {}, `Fields: ${td.fields.length}`));
-  stats.appendChild(el("span", {}, `Max align: ${Math.max(...td.fields.map(f => f.alignment), 1)}`));
+  if (td.fields.length > 0) {
+    stats.appendChild(el("span", {}, `Max align: ${Math.max(...td.fields.map(f => f.alignment), 1)}`));
+  }
   content.appendChild(stats);
   return content;
 }
+
+/* ── List view ──────────────────────────────────────────────────────── */
+
+type KindFilter = "all" | "struct" | "union";
 
 export function renderTypesList(container: Element, query: Record<string, string> = {}): void {
   clear(container);
@@ -157,6 +425,7 @@ export function renderTypesList(container: Element, query: Record<string, string
   let filterMinSize = parseInt(query.minSize ?? "") || 0;
   let filterMaxSize = parseInt(query.maxSize ?? "") || Infinity;
   let filterHasFields: "all" | "yes" | "no" = (query.hasFields as any) ?? "all";
+  let filterKind: KindFilter = (query.kind as KindFilter) ?? "all";
   let page = parseInt(query.page ?? "") || 0;
   let searchQuery = query.q ?? "";
   let useRegex = query.regex === "1";
@@ -171,6 +440,7 @@ export function renderTypesList(container: Element, query: Record<string, string
       minSize: filterMinSize > 0 ? String(filterMinSize) : "",
       maxSize: filterMaxSize < Infinity ? String(filterMaxSize) : "",
       hasFields: filterHasFields !== "all" ? filterHasFields : "",
+      kind: filterKind !== "all" ? filterKind : "",
       sort: s && s.sortBy !== "name" ? s.sortBy : "",
       sortDir: s && s.sortDir !== "asc" ? s.sortDir : "",
       page: page > 0 ? String(page) : "",
@@ -200,9 +470,11 @@ export function renderTypesList(container: Element, query: Record<string, string
     const chips: { label: string; onRemove: () => void }[] = [];
     for (const h of filterHeaders) chips.push({ label: `Header: ${h}`, onRemove: () => { filterHeaders.delete(h); page = 0; refreshAll(); } });
     if (filterMinSize > 0 || filterMaxSize < Infinity) {
-      const minS = filterMinSize > 0 ? `${filterMinSize}B` : "0", maxS = filterMaxSize < Infinity ? `${filterMaxSize}B` : "\u221e";
-      chips.push({ label: `Size: ${minS}\u2013${maxS}`, onRemove: () => { filterMinSize = 0; filterMaxSize = Infinity; sizeMin.value = ""; sizeMax.value = ""; page = 0; refreshAll(); } });
+      const minS = filterMinSize > 0 ? `${filterMinSize}B` : "0";
+      const maxS = filterMaxSize < Infinity ? `${filterMaxSize}B` : "∞";
+      chips.push({ label: `Size: ${minS}–${maxS}`, onRemove: () => { filterMinSize = 0; filterMaxSize = Infinity; sizeMin.value = ""; sizeMax.value = ""; page = 0; refreshAll(); } });
     }
+    if (filterKind !== "all") chips.push({ label: `Kind: ${filterKind}`, onRemove: () => { filterKind = "all"; kindSel.value = "all"; page = 0; refreshAll(); } });
     renderFilterChips(activeFiltersEl, chips);
   }
   rebuildChips();
@@ -234,6 +506,18 @@ export function renderTypesList(container: Element, query: Record<string, string
   }
   fieldsSel.addEventListener("change", () => { filterHasFields = fieldsSel.value as any; page = 0; renderList(); syncUrl(); });
   controls.appendChild(fieldsSel);
+
+  const kindSel = el("select", { className: "filter-select" }) as HTMLSelectElement;
+  for (const [v, l] of [["all", "Struct + Union"], ["struct", "Struct only"], ["union", "Union only"]] as const) {
+    const opt = el("option", { value: v }, l) as HTMLOptionElement;
+    if (v === filterKind) opt.selected = true;
+    kindSel.appendChild(opt);
+  }
+  kindSel.addEventListener("change", () => {
+    filterKind = kindSel.value as KindFilter; page = 0; rebuildChips(); renderList(); syncUrl();
+  });
+  controls.appendChild(kindSel);
+
   pg.appendChild(controls);
 
   const initSort = query.sort ?? "name";
@@ -251,12 +535,20 @@ export function renderTypesList(container: Element, query: Record<string, string
 
   function getFiltered(): TypeDef[] {
     let types = getTypes();
-    if (searchQuery) types = types.filter(t => matchQuery(t.name, searchQuery, useRegex) || t.fields.some(f => matchQuery(f.name, searchQuery, useRegex)));
+    if (searchQuery) {
+      types = types.filter(t =>
+        matchQuery(t.name, searchQuery, useRegex) ||
+        (t.aliases?.some(a => matchQuery(a, searchQuery, useRegex)) ?? false) ||
+        t.fields.some(f => matchQuery(f.name, searchQuery, useRegex))
+      );
+    }
     if (filterHeaders.size > 0) types = types.filter(t => t.location.file !== null && filterHeaders.has(t.location.file));
     if (filterMinSize > 0) types = types.filter(t => (t.size ?? 0) >= filterMinSize);
     if (filterMaxSize < Infinity) types = types.filter(t => (t.size ?? Infinity) <= filterMaxSize);
     if (filterHasFields === "yes") types = types.filter(t => t.fields.length > 0);
     else if (filterHasFields === "no") types = types.filter(t => t.fields.length === 0);
+    if (filterKind === "struct") types = types.filter(t => recordKind(t) === "struct");
+    else if (filterKind === "union") types = types.filter(t => recordKind(t) === "union");
     const { sortBy, sortDir } = sort.getState();
     types = [...types].sort((a, b) => {
       let cmp = 0;
@@ -280,6 +572,7 @@ export function renderTypesList(container: Element, query: Record<string, string
       const header = el("div", { className: "item-header" });
       header.appendChild(el("a", { className: "item-name", href: buildHash(`/types/${encodeURIComponent(td.name)}`) }, td.name));
       const info = el("span", { className: "item-info" });
+      info.appendChild(badge(recordKind(td), recordKind(td) === "union" ? "tag-union" : "tag-struct"));
       if (td.size !== null) info.appendChild(badge(`${td.size}B`, "tag-size"));
       else info.appendChild(badge("opaque", "tag-opaque"));
       if (td.fields.length > 0) info.appendChild(badge(`${td.fields.length}f`, "tag-fields"));
@@ -289,9 +582,10 @@ export function renderTypesList(container: Element, query: Record<string, string
       if (td.fields.length > 0 && td.size) {
         const miniBar = el("div", { className: "mini-layout-bar" });
         td.fields.forEach((f, i) => {
-          miniBar.appendChild(el("div", { className: "mini-bar-segment",
+          miniBar.appendChild(el("div", {
+            className: "mini-bar-segment",
             style: `left:${(f.offset / td.size!) * 100}%;width:${Math.max((f.size / td.size!) * 100, 0.3)}%;background:${FIELD_COLORS[i % FIELD_COLORS.length]}`,
-            title: `${f.name}: ${f.size}B`
+            title: `${f.name}: ${f.size}B`,
           }));
         });
         row.appendChild(miniBar);
@@ -304,19 +598,40 @@ export function renderTypesList(container: Element, query: Record<string, string
   renderList();
 }
 
+/* ── Detail dispatcher: handles both records and typedefs ───────────── */
+
 export function renderTypeDetail(container: Element, name: string): void {
   clear(container);
   if (name.includes("*") || name.includes("?")) { navigate(`/types?q=${encodeURIComponent(name)}`); return; }
-  const result = flexFindType(name);
-  if (!result) { renderNotFound(container, "Type", name, buildHash("/types"), "All types", findSimilarNames(name)); return; }
-  if (result.canonical !== name) { navigate("/types/" + encodeURIComponent(result.canonical)); return; }
-  const td = result.item;
+  const resolved = resolveTypeOrTypedef(name);
+  if (!resolved) {
+    renderNotFound(container, "Type", name, buildHash("/types"), "All types", findSimilarNames(name));
+    return;
+  }
+  if (resolved.kind === "type") {
+    if (resolved.canonical !== name) {
+      navigate("/types/" + encodeURIComponent(resolved.canonical));
+      return;
+    }
+    renderRecordDetail(container, resolved.type);
+  } else {
+    renderTypedefDetail(container, resolved.typedef);
+  }
+}
 
+/* ── Record detail (struct / union) ─────────────────────────────────── */
+
+function renderRecordDetail(container: Element, td: TypeDef): void {
+  const kind = recordKind(td);
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/types"), className: "back-link" }, "\u2190 All types"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "types", href: buildHash("/types") },
+    { label: `${kind}: ${td.name}` },
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, td.name));
 
   const tags = el("div", { className: "tag-row" });
+  tags.appendChild(badge(kind, kind === "union" ? "tag-union" : "tag-struct"));
   if (td.size !== null) tags.appendChild(badge(`${td.size} bytes`, "tag-size"));
   else tags.appendChild(badge("opaque", "tag-opaque"));
   tags.appendChild(badge(`${td.fields.length} fields`, "tag-fields"));
@@ -326,38 +641,140 @@ export function renderTypeDetail(container: Element, name: string): void {
   tags.appendChild(locTag);
   pg.appendChild(tags);
 
+  if (td.aliases && td.aliases.length > 0) {
+    const aliasRow = el("div", { className: "tag-row alias-row" });
+    aliasRow.appendChild(el("span", { className: "dim" }, "aka:"));
+    for (const a of td.aliases) {
+      aliasRow.appendChild(typeLink(a));
+    }
+    pg.appendChild(aliasRow);
+  }
+
   if (td.fields.length > 0) {
     const proto = el("pre", { className: "c-prototype" });
-    let code = `typedef struct ${td.name} {\n`;
-    for (const f of td.fields) {
-      const offset = `0x${f.offset.toString(16).toUpperCase().padStart(4, "0")}`;
-      let typeStr = f.type ?? "?";
-      let nameStr = f.name;
-      // Split array suffix from type into the name: "WORD[3]" → "WORD", "name[3]"
-      if (f.is_array && f.array_size != null) {
-        typeStr = typeStr.replace(/\[\d+\]$/, "");
-        nameStr = `${f.name}[${f.array_size}]`;
-      }
-      code += `  /* ${offset} */  ${typeStr} ${nameStr};  /* size: ${f.size}, align: ${f.alignment} */\n`;
-    }
-    code += `} ${td.name.startsWith("_") ? td.name.slice(1) : td.name}, *P${td.name.startsWith("_") ? td.name.slice(1) : td.name};`;
-    if (td.size) code += `  /* total size: 0x${td.size.toString(16).toUpperCase()} (${td.size}) */`;
-    proto.textContent = code;
-    pg.appendChild(collapsibleSection("C Definition", proto));
+    proto.textContent = emitRecord(td, "", false).join("\n");
+    pg.appendChild(collapsibleSection("C Definition", withGutter(proto)));
     requestAnimationFrame(() => highlightCode(proto));
   }
 
-  pg.appendChild(collapsibleSection("Memory Layout", renderMemoryLayout(td)));
+  // Unions don't have a "layout" — every member starts at 0 and there's no
+  // single sequential picture to draw. Skip the section entirely for unions
+  // (the field table + per-member sizes already convey the relevant info).
+  if (kind !== "union") {
+    pg.appendChild(collapsibleSection("Memory Layout", renderMemoryLayout(td)));
+  }
 
   if (td.fields.length > 0) {
-    pg.appendChild(collapsibleSection("Fields", renderFieldTable(td.fields, td.name, new Set([td.name]))));
+    pg.appendChild(collapsibleSection("Fields", renderFieldTable(td.fields, {
+      parentName: td.name, parentKind: kind, baseOffset: 0, visited: new Set([td.name]),
+    })));
   } else {
     pg.appendChild(el("p", { className: "dim" }, "This type has no visible fields (opaque/forward declaration)."));
   }
 
+  appendXRefs(pg, td.name);
+  // Also surface xrefs registered under any alias name.
+  if (td.aliases) {
+    for (const a of td.aliases) appendXRefs(pg, a, ` via ${a}`);
+  }
+
+  container.appendChild(pg);
+  renderOutlinePanel(pg);
+}
+
+/* ── Typedef detail ─────────────────────────────────────────────────── */
+
+function renderTypedefDetail(container: Element, t: Typedef): void {
+  const pg = el("div", { className: "detail-view" });
+  pg.appendChild(renderBreadcrumb([
+    { label: "types", href: buildHash("/types") },
+    { label: `typedef: ${t.name}` },
+  ]));
+  pg.appendChild(el("h2", { className: "mono" }, t.name));
+
+  const tags = el("div", { className: "tag-row" });
+  tags.appendChild(badge("typedef", "tag-typedef"));
+  tags.appendChild(badge(`kind: ${t.kind}`, `tag-typedef-${t.kind}`));
+  if (t.is_pointer) tags.appendChild(badge(`pointer depth ${t.pointer_depth}`, "tag-ptr"));
+  if (t.is_array) tags.appendChild(badge("array", "tag-arr"));
+  if (t.is_function_pointer) tags.appendChild(badge("function pointer", "tag-fnptr"));
+  if (t.is_const) tags.appendChild(badge("const", "tag-const"));
+  const locTag = el("span", { className: "badge tag-loc" });
+  locTag.appendChild(headerLink(t.location.file ?? "?", "types"));
+  if (t.location.line) locTag.appendChild(document.createTextNode(`:${t.location.line}`));
+  tags.appendChild(locTag);
+  pg.appendChild(tags);
+
+  // Chain visualization: name → step1 → step2 → ... → canonical
+  const chainContainer = el("div", { className: "typedef-chain" });
+  chainContainer.appendChild(el("span", { className: "mono bold" }, t.name));
+  chainContainer.appendChild(document.createTextNode(" → "));
+  const chainSteps: string[] = t.chain.length > 0 ? t.chain : [t.canonical];
+  chainSteps.forEach((step, i) => {
+    if (i > 0) chainContainer.appendChild(document.createTextNode(" → "));
+    chainContainer.appendChild(renderTypeStr(step));
+  });
+  pg.appendChild(collapsibleSection("Typedef chain", chainContainer));
+
+  // C definition line
+  const cdef = el("pre", { className: "c-prototype" });
+  cdef.textContent = `typedef ${t.canonical} ${t.name};`;
+  pg.appendChild(collapsibleSection("C Definition", withGutter(cdef)));
+  requestAnimationFrame(() => highlightCode(cdef));
+
+  // Underlying record/enum link (if any). The typedef.kind discriminator tells
+  // us which entity table to look in (records live in /types, enums in /constants/enum).
+  if (t.underlying_record) {
+    const underlyingRecord = findType(t.underlying_record);
+    const underlyingEnum = !underlyingRecord ? findEnum(t.underlying_record) : undefined;
+    if (underlyingRecord) {
+      const linkPara = el("div", { className: "typedef-underlying" });
+      linkPara.appendChild(el("strong", {}, "Underlying record: "));
+      linkPara.appendChild(typeLink(t.underlying_record));
+      linkPara.appendChild(el("span", { className: "dim" },
+        ` (${recordKind(underlyingRecord)}, ${underlyingRecord.size ?? "?"}B, ${underlyingRecord.fields.length} fields)`));
+      pg.appendChild(linkPara);
+
+      if (underlyingRecord.fields.length > 0) {
+        pg.appendChild(collapsibleSection(`Underlying — ${underlyingRecord.name}`,
+          renderFieldTable(underlyingRecord.fields, {
+            parentName: underlyingRecord.name,
+            parentKind: recordKind(underlyingRecord),
+            baseOffset: 0,
+            visited: new Set([underlyingRecord.name]),
+          })));
+      }
+    } else if (underlyingEnum) {
+      const linkPara = el("div", { className: "typedef-underlying" });
+      linkPara.appendChild(el("strong", {}, "Underlying enum: "));
+      linkPara.appendChild(enumLink(underlyingEnum.name));
+      linkPara.appendChild(el("span", { className: "dim" },
+        ` (${underlyingEnum.constants.length} variants${underlyingEnum.type ? `, ${underlyingEnum.type}` : ""})`));
+      pg.appendChild(linkPara);
+    } else {
+      pg.appendChild(el("div", { className: "typedef-underlying" },
+        el("strong", {}, "Underlying record: "),
+        document.createTextNode(`${t.underlying_record} (not in current dataset)`)));
+    }
+  } else if (t.underlying_type) {
+    const linkPara = el("div", { className: "typedef-underlying" });
+    linkPara.appendChild(el("strong", {}, "Terminal primitive: "));
+    linkPara.appendChild(el("code", { className: "mono" }, t.underlying_type));
+    pg.appendChild(linkPara);
+  }
+
+  appendXRefs(pg, t.name);
+
+  container.appendChild(pg);
+  renderOutlinePanel(pg);
+}
+
+/* ── Shared xref renderer ───────────────────────────────────────────── */
+
+function appendXRefs(pg: HTMLElement, name: string, titleSuffix = ""): void {
   const xrefData = getXRef();
 
-  function renderFuncXref(title: string, fnSet: Set<string> | undefined) {
+  const renderFuncXref = (title: string, fnSet: Set<string> | undefined) => {
     if (!fnSet || fnSet.size === 0) return;
     const list = el("div", { className: "xref-list" });
     const sorted = [...fnSet].sort();
@@ -372,18 +789,16 @@ export function renderTypeDetail(container: Element, name: string): void {
       }
     };
     render();
-    pg.appendChild(collapsibleSection(`${title} (${fnSet.size})`, list));
-  }
+    pg.appendChild(collapsibleSection(`${title}${titleSuffix} (${fnSet.size})`, list));
+  };
 
-  renderFuncXref("Functions that take this type", xrefData.typeToFuncParams.get(td.name));
-  renderFuncXref("Functions that return this type", xrefData.typeToFuncReturns.get(td.name));
+  renderFuncXref("Functions that take this type", xrefData.nameToFuncParams.get(name));
+  renderFuncXref("Functions that return this type", xrefData.nameToFuncReturns.get(name));
 
-  const parentTypes = xrefData.typeToParentTypes.get(td.name);
+  const parentTypes = xrefData.nameToParentTypes.get(name);
   if (parentTypes && parentTypes.size > 0) {
     const list = el("div", { className: "xref-list" });
     for (const pt of [...parentTypes].sort()) list.appendChild(el("span", { className: "xref-chip" }, typeLink(pt)));
-    pg.appendChild(collapsibleSection(`Types containing this type (${parentTypes.size})`, list));
+    pg.appendChild(collapsibleSection(`Types containing this type${titleSuffix} (${parentTypes.size})`, list));
   }
-
-  container.appendChild(pg);
 }

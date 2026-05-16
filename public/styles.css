@@ -606,6 +606,111 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 }
 .param-values { display: flex; gap: 4px; flex-wrap: wrap; }
 
+/* ── Status bar (VS Code-style footer) ── */
+.status-bar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: 22px; line-height: 22px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  font-family: "Courier New", monospace;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  z-index: 50;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.status-bar .sb-left, .status-bar .sb-middle, .status-bar .sb-right {
+  display: flex; align-items: center; gap: 12px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.status-bar .sb-middle { flex: 1; justify-content: center; min-width: 0; }
+.status-bar .sb-cell { color: var(--text); padding: 0 4px; }
+.status-bar .sb-ds, .status-bar .sb-arch { color: var(--accent); }
+.status-bar .sb-mode-user { color: var(--val-green); }
+.status-bar .sb-mode-kernel { color: var(--val-yellow); }
+.status-bar .sb-path { color: var(--text-dim); font-size: 0.7rem; }
+.status-bar .sb-counts { color: var(--text-dim); font-size: 0.7rem; }
+
+/* Leave room for the status bar so content isn't covered. */
+main#content { padding-bottom: 28px; }
+
+/* ── Breadcrumbs ── */
+.breadcrumb {
+  display: flex; align-items: center; flex-wrap: wrap;
+  font-family: "Courier New", monospace; font-size: 0.78rem;
+  color: var(--text-dim);
+  padding: 4px 0 8px;
+  border-bottom: 1px dashed var(--border-light);
+  margin-bottom: 10px;
+}
+.breadcrumb-sep { color: var(--border); padding: 0 2px; }
+.breadcrumb-link { color: var(--text-dim); text-decoration: none; }
+.breadcrumb-link:hover { color: var(--accent); text-decoration: underline; }
+.breadcrumb-current { color: var(--accent); font-weight: 600; }
+
+/* ── Outline panel (fixed right rail with jump-to-section links) ── */
+.outline-panel {
+  position: fixed; right: 12px; top: 90px;
+  width: 200px; max-height: calc(100vh - 130px);
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  padding: 8px 10px;
+  font-family: "Courier New", monospace;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  z-index: 30;
+}
+.outline-title {
+  font-size: 0.66rem; letter-spacing: 0.1em;
+  color: var(--text-dim);
+  padding-bottom: 4px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-light);
+}
+.outline-list { list-style: none; padding: 0; margin: 0; }
+.outline-item { padding: 2px 0; }
+.outline-link {
+  display: block; padding: 1px 4px;
+  color: var(--text-dim); text-decoration: none;
+  border-left: 2px solid transparent;
+}
+.outline-link:hover {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(255, 255, 255, 0.02);
+}
+/* Auto-hide outline on narrow viewports — the content column needs the room. */
+@media (max-width: 1400px) { .outline-panel { display: none; } }
+
+/* ── Code gutter (editor-style line numbers) ── */
+.code-with-gutter {
+  display: flex; align-items: stretch;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.code-with-gutter .code-gutter {
+  margin: 0; padding: 12px 8px 12px 12px;
+  background: var(--bg);
+  color: var(--text-dim);
+  border-right: 1px solid var(--border-light);
+  text-align: right;
+  font-size: 0.78rem; line-height: 1.5;
+  user-select: none;
+  min-width: 32px;
+  white-space: pre;
+  opacity: 0.55;
+}
+.code-with-gutter .code-body {
+  margin: 0; flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 0.78rem; line-height: 1.5;
+  overflow-x: auto;
+}
+
 /* ── Cross-references ── */
 .xref-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .xref-chip {
@@ -615,14 +720,59 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
   transition: border-color var(--transition);
 }
 .xref-chip:hover { border-color: var(--border); }
-.xref { font-size: 0.82rem; text-decoration: none !important; }
-.xref:hover { text-decoration: underline !important; }
+.xref {
+  font-size: 0.82rem;
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.xref:hover { text-decoration-color: currentColor !important; }
 .xref-type { color: var(--accent); }
 .xref-func { color: var(--val-purple); }
 .xref-const { color: var(--val-yellow); }
 .xref-enum { color: var(--val-green); }
-.xref-header { color: var(--text-dim); font-size: 0.78rem; }
-.xref-header:hover { color: var(--accent); }
+/* Header xrefs stay subtle — text-only chrome, no underline by default. */
+.xref-header { color: var(--text-dim); font-size: 0.78rem; text-decoration: none !important; }
+.xref-header:hover { color: var(--accent); text-decoration: underline !important; }
+
+/* IRQL severity badges — green (safe) → red (dangerous), matching kernel docs convention. */
+.tag-irql {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+.tag-irql.irql-passive {
+  background: rgba(80, 200, 120, 0.15);
+  color: #7ee787;
+  border-color: rgba(80, 200, 120, 0.35);
+}
+.tag-irql.irql-apc {
+  background: rgba(200, 200, 80, 0.12);
+  color: #e3b341;
+  border-color: rgba(200, 200, 80, 0.30);
+}
+.tag-irql.irql-dispatch {
+  background: rgba(255, 165, 0, 0.14);
+  color: #ffa657;
+  border-color: rgba(255, 165, 0, 0.32);
+}
+.tag-irql.irql-high {
+  background: rgba(255, 80, 80, 0.16);
+  color: #ff7b72;
+  border-color: rgba(255, 80, 80, 0.36);
+}
+.tag-irql.irql-unknown {
+  background: var(--bg-card);
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+.tag-tech { background: var(--bg-card); color: var(--val-purple); border: 1px solid var(--border); }
+.tag-src-driver { background: var(--bg-card); color: var(--val-yellow); border: 1px solid var(--border); }
+.tag-src-sdk { background: var(--bg-card); color: var(--val-green); border: 1px solid var(--border); }
+.tag-typedef { background: var(--bg-card); color: var(--val-purple); border: 1px solid var(--border); }
+.tag-union { background: rgba(120, 120, 240, 0.18); color: #a5d6ff; border: 1px solid rgba(120, 120, 240, 0.35); }
+.tag-struct { background: var(--bg-card); color: var(--text-dim); border: 1px solid var(--border); }
 
 /* ── Memory Layout ── */
 .layout-grid-container {
@@ -767,6 +917,17 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 .arch-btn:hover { color: var(--text); }
 .arch-btn.active { color: var(--val-green); background: var(--bg-card); }
 
+/* ── Mode Switcher ── */
+.mode-switcher { display: flex; gap: 1px; padding: 1px; background: var(--border-light); }
+.mode-btn {
+  padding: 3px 10px; font-size: 0.78rem; font-weight: 600;
+  background: transparent; color: var(--text-dim);
+  border: none; cursor: pointer; transition: all var(--transition);
+  font-family: var(--font); white-space: nowrap;
+}
+.mode-btn:hover { color: var(--text); }
+.mode-btn.active { color: var(--accent); background: var(--bg-card); }
+
 /* ── Filter Dropdown ── */
 .filter-dropdown { position: relative; }
 .filter-dropdown-trigger {
@@ -863,20 +1024,51 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
   color: var(--accent); background: var(--accent-dim); border-color: var(--accent);
 }
 
+/* ── Field-table column widths (kept consistent across nested expansions) ── */
+.field-table { table-layout: fixed; width: 100%; }
+.field-table col.col-offset { width: 80px; }
+.field-table col.col-bits   { width: 50px; }
+.field-table col.col-name   { width: 30%; }
+.field-table col.col-type   { width: auto; }
+.field-table col.col-size   { width: 60px; }
+.field-table col.col-align  { width: 60px; }
+.field-table td, .field-table th { overflow: hidden; text-overflow: ellipsis; }
+/* Depth-based indent on the Name column gives a file-tree look while
+   keeping every other column rail-straight for offset/size scanning.
+   --depth is set on each .field-table (0 = outermost). */
+.field-table .field-name-col {
+  padding-left: calc(var(--depth, 0) * 16px + 8px) !important;
+}
+/* Nested-toggle row also indents so the toggle visually sits "inside"
+   its parent record's level. */
+.nested-toggle {
+  padding-left: calc(var(--depth, 0) * 16px + 10px) !important;
+}
+
 /* ── Nested type expansion in field table ── */
-.nested-expansion-row td {
-  padding: 0 10px 6px 30px !important;
+.nested-expansion-row > td {
+  padding: 0 !important;
   border-bottom: 1px solid var(--border-light);
 }
 .nested-toggle {
   display: flex; align-items: center; gap: 6px; cursor: pointer;
-  padding: 4px 0; user-select: none; font-size: 0.82rem;
+  padding: 4px 10px; user-select: none; font-size: 0.82rem;
+  background: var(--bg);
+  /* padding-left also overridden by the depth-aware rule above */
 }
 .nested-toggle:hover { color: var(--accent); }
 .nested-toggle .collapse-arrow { font-size: 0.6rem; width: 10px; color: var(--text-dim); }
-.nested-body { margin-left: 10px; border-left: 1px solid var(--accent); padding-left: 8px; }
+.nested-body {
+  /* No horizontal padding/margin — the inner table aligns column-for-column
+     with the outer. The left border alone signals the nesting hierarchy. */
+  border-left: 2px solid var(--accent);
+  background: rgba(255, 255, 255, 0.015);
+}
 .nested-body.collapsed { display: none; }
-.nested-body .data-table { font-size: 0.78rem; }
+/* Hide the duplicated column header in nested tables — the outer header
+   already describes the (identical) columns. */
+.nested-body .field-table > thead { display: none; }
+.nested-body .field-table { font-size: 0.78rem; }
 
 /* ── Arborium Syntax Highlighting ── */
 /* Inline highlighted code (e.g. expressions in tables) */
@@ -897,7 +1089,8 @@ a:hover { text-decoration: underline; text-shadow: var(--text-shadow); }
 
 /* ── Clippy ── */
 #clippy-box {
-  position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+  /* bottom offset clears the 22px status bar + breathing room */
+  position: fixed; bottom: 42px; right: 20px; z-index: 10000;
   width: 36px; height: 36px;
   border-radius: 50%;
   background: var(--bg-card);

@@ -1,6 +1,7 @@
-import { getFunctions, getTypes, getConstants, getEnums, getXRef, cleanDll } from "../data";
+import { getFunctions, getTypes, getTypedefs, getConstants, getEnums, getXRef, cleanDll, getCurrentMode } from "../data";
 import { el, clear } from "../dom";
 import { navigate } from "../router";
+import { IRQL_LEVELS, isNumericLevel, formatIrql } from "../irql";
 import type { Func, TypeDef } from "../types";
 
 function countBy<T>(items: T[], keyFn: (item: T) => string | null): [string, number][] {
@@ -138,9 +139,13 @@ export function renderHome(container: Element): void {
   clear(container);
   const funcs = getFunctions();
   const types = getTypes();
+  const typedefs = getTypedefs();
   const consts = getConstants();
   const enums = getEnums();
   const xref = getXRef();
+  const isKernel = getCurrentMode() === "kernel";
+  const unionTypes = types.filter(t => (t.kind ?? "struct") === "union");
+  const structTypes = types.filter(t => (t.kind ?? "struct") === "struct");
 
   const page = el("div", { className: "home-view" });
 
@@ -163,10 +168,17 @@ export function renderHome(container: Element): void {
   fnCard.addEventListener("click", () => navigate("/functions"));
   statsRow.appendChild(fnCard);
 
-  const tCard = statCard("Types", types.length.toLocaleString(), `${withFields.toLocaleString()} with fields`);
+  const tCard = statCard("Types", types.length.toLocaleString(),
+    `${structTypes.length.toLocaleString()} struct · ${unionTypes.length.toLocaleString()} union`);
   tCard.style.cursor = "pointer";
   tCard.addEventListener("click", () => navigate("/types"));
   statsRow.appendChild(tCard);
+
+  const tdCard = statCard("Typedefs", typedefs.length.toLocaleString(),
+    `${withFields.toLocaleString()} types with fields`);
+  tdCard.style.cursor = "pointer";
+  tdCard.addEventListener("click", () => navigate("/types"));
+  statsRow.appendChild(tdCard);
 
   const cCard = statCard("Constants", consts.length.toLocaleString(), `${withComponents.toLocaleString()} composed`);
   cCard.style.cursor = "pointer";
@@ -188,6 +200,16 @@ export function renderHome(container: Element): void {
 
   // Charts — ordered by interest to a Windows reverse engineer / API nerd
   const chartsRow = el("div", { className: "charts-row" });
+
+  // Source (sdk vs driver) — visible in both modes
+  const sourceCounts = countBy(funcs, f => f.metadata?.source ?? null);
+  if (sourceCounts.length > 1) {
+    chartsRow.appendChild(barChart("Functions by MSDN source", sourceCounts, {
+      onClick: (s) => navigate(`/functions?source=${encodeURIComponent(s)}`),
+    }));
+  }
+
+
 
   // --- Version helpers ---
   function parseWinVersion(mc: string): string {
@@ -241,6 +263,47 @@ export function renderHome(container: Element): void {
     }));
   }
 
+  // 2b/2c/2d. Kernel-only — KMDF/UMDF version distributions, then IRQL constraint.
+  // Placed after the OS version stuff so all "min version"-style charts are adjacent.
+  if (isKernel) {
+    const kmdfCounts = countBy(funcs, f => f.driver?.kmdf_ver ? `KMDF ${f.driver.kmdf_ver}` : null);
+    if (kmdfCounts.length > 0) {
+      chartsRow.appendChild(barChart("Functions by KMDF version", kmdfCounts, {
+        allItems: kmdfCounts, onClick: (k) => {
+          const ver = k.replace(/^KMDF /, "");
+          navigate(`/functions?kmdf=${encodeURIComponent(ver)}`);
+        },
+      }));
+    }
+    const umdfCounts = countBy(funcs, f => f.driver?.umdf_ver ? `UMDF ${f.driver.umdf_ver}` : null);
+    if (umdfCounts.length > 0) {
+      chartsRow.appendChild(barChart("Functions by UMDF version", umdfCounts, {
+        allItems: umdfCounts, onClick: (k) => {
+          const ver = k.replace(/^UMDF /, "");
+          navigate(`/functions?umdf=${encodeURIComponent(ver)}`);
+        },
+      }));
+    }
+    const irqlCounts = new Map<string, number>();
+    for (const f of funcs) {
+      const irql = f.driver?.irql;
+      if (irql && isNumericLevel(irql.level)) {
+        const key = formatIrql(irql);
+        irqlCounts.set(key, (irqlCounts.get(key) ?? 0) + 1);
+      }
+    }
+    if (irqlCounts.size > 0) {
+      const sorted = [...irqlCounts.entries()].sort((a, b) => {
+        const la = a[0].split(" ").pop()!;
+        const lb = b[0].split(" ").pop()!;
+        return (IRQL_LEVELS[la] ?? 99) - (IRQL_LEVELS[lb] ?? 99);
+      });
+      chartsRow.appendChild(barChart("Functions by IRQL constraint", sorted, {
+        allItems: sorted, onClick: (k) => navigate(`/functions?irql=${encodeURIComponent(k)}`),
+      }));
+    }
+  }
+
   // 3. Top DLLs — "where do these functions live?"
   const allDlls = countBy(funcs.filter(f => f.metadata?.dll), f => cleanDll(f.metadata!.dll!));
   chartsRow.appendChild(barChart("Top DLLs", allDlls.slice(0, 10), {
@@ -250,8 +313,8 @@ export function renderHome(container: Element): void {
   // 4. Most referenced types — "what types show up everywhere?"
   // Combine param + return refs for total usage count
   const typeRefCounts = new Map<string, number>();
-  for (const [name, fns] of xref.typeToFuncParams) typeRefCounts.set(name, (typeRefCounts.get(name) ?? 0) + fns.size);
-  for (const [name, fns] of xref.typeToFuncReturns) typeRefCounts.set(name, (typeRefCounts.get(name) ?? 0) + fns.size);
+  for (const [name, fns] of xref.nameToFuncParams) typeRefCounts.set(name, (typeRefCounts.get(name) ?? 0) + fns.size);
+  for (const [name, fns] of xref.nameToFuncReturns) typeRefCounts.set(name, (typeRefCounts.get(name) ?? 0) + fns.size);
   const allTypeRefs: [string, number][] = [...typeRefCounts.entries()]
     .sort((a, b) => b[1] - a[1]);
   chartsRow.appendChild(barChart("Most referenced types (in functions)", allTypeRefs.slice(0, 10), {

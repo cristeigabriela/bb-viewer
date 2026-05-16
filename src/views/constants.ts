@@ -4,7 +4,7 @@ import { matchQuery } from "../utils";
 import { constLink, enumLink, funcLink, headerLink, badge, highlightCode } from "../ui/links";
 import { buildHash, navigate } from "../router";
 import { buildFilterDropdown, FilterDropdownHandle } from "../ui/filter-dropdown";
-import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl } from "./shared";
+import { buildSearchInput, buildSortRow, renderFilterChips, renderNotFound, collapsibleSection, renderPagination, syncViewUrl, renderBreadcrumb, renderOutlinePanel, withGutter } from "./shared";
 import type { Constant, EnumDef } from "../types";
 
 const PAGE_SIZE = 50;
@@ -218,7 +218,10 @@ export function renderConstantDetail(container: Element, name: string): void {
   if (!c) { renderNotFound(container, "Constant", name, buildHash("/constants"), "All constants", findSimilarNames(name)); return; }
 
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/constants"), className: "back-link" }, "\u2190 All constants"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "constants", href: buildHash("/constants") },
+    { label: c.name },
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, c.name));
 
   const valContent = el("div", {});
@@ -296,6 +299,7 @@ export function renderConstantDetail(container: Element, name: string): void {
   }
 
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }
 
 export function renderEnumDetail(container: Element, name: string): void {
@@ -305,7 +309,10 @@ export function renderEnumDetail(container: Element, name: string): void {
   if (!e) { renderNotFound(container, "Enum", name, buildHash("/constants"), "All constants", findSimilarNames(name)); return; }
 
   const pg = el("div", { className: "detail-view" });
-  pg.appendChild(el("a", { href: buildHash("/constants"), className: "back-link" }, "\u2190 All constants"));
+  pg.appendChild(renderBreadcrumb([
+    { label: "constants", href: buildHash("/constants") },
+    { label: `enum: ${e.name}` },
+  ]));
   pg.appendChild(el("h2", { className: "mono" }, e.name));
 
   const tags = el("div", { className: "tag-row" });
@@ -326,7 +333,7 @@ export function renderEnumDetail(container: Element, name: string): void {
   });
   code += `} ${e.name};`;
   proto.textContent = code;
-  pg.appendChild(collapsibleSection("C Definition", proto));
+  pg.appendChild(collapsibleSection("C Definition", withGutter(proto)));
   requestAnimationFrame(() => highlightCode(proto));
 
   const table = el("table", { className: "data-table" });
@@ -343,4 +350,5 @@ export function renderEnumDetail(container: Element, name: string): void {
   pg.appendChild(collapsibleSection("Variants", table));
 
   container.appendChild(pg);
+  renderOutlinePanel(pg);
 }

@@ -1,26 +1,22 @@
-import { findFunc, flexFindType, findConst, findEnum, searchAll, findSimilarNames } from "../data";
+import { findFunc, resolveTypeOrTypedef, findConst, findEnum, searchAll, findSimilarNames, loadData, getCurrentDataset } from "../data";
 import { navigate, buildHash } from "../router";
 import { el, clear } from "../dom";
 import { badge } from "../ui/links";
 import { renderNotFound } from "./shared";
 
-export function renderLookup(container: Element, name: string): void {
-  clear(container);
+type Match = { kind: string; name: string };
 
-  // If the name has glob wildcards, redirect to a search on all categories
-  if (name.includes("*") || name.includes("?")) {
-    navigate(`/functions?q=${encodeURIComponent(name)}`);
-    return;
-  }
-
-  // Try exact matches across all categories
-  const matches: Array<{ kind: string; name: string }> = [];
+function collectExactMatches(name: string): Match[] {
+  const matches: Match[] = [];
 
   const fn = findFunc(name);
   if (fn) matches.push({ kind: "function", name: fn.name });
 
-  const typeResult = flexFindType(name);
-  if (typeResult) matches.push({ kind: "type", name: typeResult.canonical });
+  const typeResult = resolveTypeOrTypedef(name);
+  if (typeResult) {
+    const canonicalName = typeResult.kind === "type" ? typeResult.canonical : typeResult.typedef.name;
+    matches.push({ kind: typeResult.kind === "typedef" ? "typedef" : "type", name: canonicalName });
+  }
 
   const c = findConst(name);
   if (c) matches.push({ kind: "constant", name: c.name });
@@ -28,30 +24,67 @@ export function renderLookup(container: Element, name: string): void {
   const e = findEnum(name);
   if (e) matches.push({ kind: "enum", name: e.name });
 
-  // One exact match → redirect
-  if (matches.length === 1) {
-    const m = matches[0];
-    switch (m.kind) {
-      case "function": navigate(`/functions/${encodeURIComponent(m.name)}`); return;
-      case "type": navigate(`/types/${encodeURIComponent(m.name)}`); return;
-      case "constant": navigate(`/constants/${encodeURIComponent(m.name)}`); return;
-      case "enum": navigate(`/constants/enum/${encodeURIComponent(m.name)}`); return;
-    }
+  return matches;
+}
+
+function entityHref(m: Match): string {
+  switch (m.kind) {
+    case "function": return `/functions/${encodeURIComponent(m.name)}`;
+    case "type":
+    case "typedef": return `/types/${encodeURIComponent(m.name)}`;
+    case "enum": return `/constants/enum/${encodeURIComponent(m.name)}`;
+    default: return `/constants/${encodeURIComponent(m.name)}`;
+  }
+}
+
+/**
+ * Universal lookup. Per the user-facing contract, `/q/:name` cares about
+ * dataset but not mode: it always tries user mode first, falls back to kernel
+ * if no exact match is found, and lets `navigate()` pick up whichever mode
+ * yielded the hit. Arch is pinned to amd64 (most universally available).
+ */
+export async function renderLookup(container: Element, name: string): Promise<void> {
+  clear(container);
+
+  // Glob → redirect to full-text search.
+  if (name.includes("*") || name.includes("?")) {
+    navigate(`/functions?q=${encodeURIComponent(name)}`);
+    return;
   }
 
-  // Multiple exact matches → disambiguation page
+  // Loading placeholder (matters when both modes need network round-trips).
+  const loader = el("div", { className: "detail-view" });
+  loader.appendChild(el("h2", {}, `Resolving "${name}"…`));
+  loader.appendChild(el("p", { className: "dim" }, "Trying user mode, then kernel mode."));
+  container.appendChild(loader);
+
+  const ds = getCurrentDataset();
+  const arch = "amd64";
+
+  await loadData(ds, arch, "user");
+  let matches = collectExactMatches(name);
+  if (matches.length === 0) {
+    await loadData(ds, arch, "kernel");
+    matches = collectExactMatches(name);
+  }
+
+  clear(container);
+
+  // One exact match → redirect (navigate uses the currently-loaded mode).
+  if (matches.length === 1) {
+    navigate(entityHref(matches[0]));
+    return;
+  }
+
+  // Multiple exact matches → disambiguation.
   if (matches.length > 1) {
     const pg = el("div", { className: "detail-view" });
     pg.appendChild(el("h2", {}, `Multiple matches for "${name}"`));
     pg.appendChild(el("p", { className: "dim" }, "This identifier exists in multiple categories:"));
     const list = el("div", { className: "suggestions" });
     for (const m of matches) {
-      const href = m.kind === "function" ? buildHash(`/functions/${encodeURIComponent(m.name)}`)
-        : m.kind === "type" ? buildHash(`/types/${encodeURIComponent(m.name)}`)
-        : m.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(m.name)}`)
-        : buildHash(`/constants/${encodeURIComponent(m.name)}`);
       const chip = el("span", { className: "suggestion-chip" },
-        el("a", { href, className: "xref" }, m.name),
+        el("a", { href: buildHash(entityHref(m)), className: "xref" }, m.name),
       );
       chip.appendChild(el("span", { className: "dim" }, ` (${m.kind})`));
       list.appendChild(chip);
@@ -61,20 +94,16 @@ export function renderLookup(container: Element, name: string): void {
     return;
   }
 
-  // No exact match → try searchAll for partial matches
+  // No exact match in either mode → partial-match search on whatever's loaded.
   const results = searchAll(name, 50);
   if (results.length > 0) {
     const pg = el("div", { className: "detail-view" });
     pg.appendChild(el("h2", {}, `Search results for "${name}"`));
     const list = el("div", { className: "lookup-results" });
     for (const r of results) {
-      const href = r.kind === "function" ? buildHash(`/functions/${encodeURIComponent(r.name)}`)
-        : r.kind === "type" ? buildHash(`/types/${encodeURIComponent(r.name)}`)
-        : r.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(r.name)}`)
-        : buildHash(`/constants/${encodeURIComponent(r.name)}`);
       const row = el("div", { className: "lookup-result-item" });
       row.appendChild(badge(r.kind, `search-badge-${r.kind === "constant" ? "const" : r.kind}`));
-      row.appendChild(el("a", { href, className: "xref" }, r.name));
+      row.appendChild(el("a", { href: buildHash(entityHref(r)), className: "xref" }, r.name));
       list.appendChild(row);
     }
     pg.appendChild(list);
@@ -82,6 +111,5 @@ export function renderLookup(container: Element, name: string): void {
     return;
   }
 
-  // Nothing at all → not found with suggestions
   renderNotFound(container, "Identifier", name, buildHash("/"), "Home", findSimilarNames(name));
 }
