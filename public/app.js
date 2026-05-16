@@ -4104,12 +4104,7 @@ function renderEnumDetail(container, name) {
 }
 
 // src/views/lookup.ts
-function renderLookup(container, name) {
-  clear(container);
-  if (name.includes("*") || name.includes("?")) {
-    navigate(`/functions?q=${encodeURIComponent(name)}`);
-    return;
-  }
+function collectExactMatches(name) {
   const matches = [];
   const fn = findFunc(name);
   if (fn)
@@ -4125,23 +4120,43 @@ function renderLookup(container, name) {
   const e = findEnum(name);
   if (e)
     matches.push({ kind: "enum", name: e.name });
+  return matches;
+}
+function entityHref(m) {
+  switch (m.kind) {
+    case "function":
+      return `/functions/${encodeURIComponent(m.name)}`;
+    case "type":
+    case "typedef":
+      return `/types/${encodeURIComponent(m.name)}`;
+    case "enum":
+      return `/constants/enum/${encodeURIComponent(m.name)}`;
+    default:
+      return `/constants/${encodeURIComponent(m.name)}`;
+  }
+}
+async function renderLookup(container, name) {
+  clear(container);
+  if (name.includes("*") || name.includes("?")) {
+    navigate(`/functions?q=${encodeURIComponent(name)}`);
+    return;
+  }
+  const loader = el("div", { className: "detail-view" });
+  loader.appendChild(el("h2", {}, `Resolving "${name}"…`));
+  loader.appendChild(el("p", { className: "dim" }, "Trying user mode, then kernel mode."));
+  container.appendChild(loader);
+  const ds = getCurrentDataset();
+  const arch = "amd64";
+  await loadData(ds, arch, "user");
+  let matches = collectExactMatches(name);
+  if (matches.length === 0) {
+    await loadData(ds, arch, "kernel");
+    matches = collectExactMatches(name);
+  }
+  clear(container);
   if (matches.length === 1) {
-    const m = matches[0];
-    switch (m.kind) {
-      case "function":
-        navigate(`/functions/${encodeURIComponent(m.name)}`);
-        return;
-      case "type":
-      case "typedef":
-        navigate(`/types/${encodeURIComponent(m.name)}`);
-        return;
-      case "constant":
-        navigate(`/constants/${encodeURIComponent(m.name)}`);
-        return;
-      case "enum":
-        navigate(`/constants/enum/${encodeURIComponent(m.name)}`);
-        return;
-    }
+    navigate(entityHref(matches[0]));
+    return;
   }
   if (matches.length > 1) {
     const pg = el("div", { className: "detail-view" });
@@ -4149,8 +4164,7 @@ function renderLookup(container, name) {
     pg.appendChild(el("p", { className: "dim" }, "This identifier exists in multiple categories:"));
     const list = el("div", { className: "suggestions" });
     for (const m of matches) {
-      const href = m.kind === "function" ? buildHash(`/functions/${encodeURIComponent(m.name)}`) : m.kind === "type" || m.kind === "typedef" ? buildHash(`/types/${encodeURIComponent(m.name)}`) : m.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(m.name)}`) : buildHash(`/constants/${encodeURIComponent(m.name)}`);
-      const chip = el("span", { className: "suggestion-chip" }, el("a", { href, className: "xref" }, m.name));
+      const chip = el("span", { className: "suggestion-chip" }, el("a", { href: buildHash(entityHref(m)), className: "xref" }, m.name));
       chip.appendChild(el("span", { className: "dim" }, ` (${m.kind})`));
       list.appendChild(chip);
     }
@@ -4164,10 +4178,9 @@ function renderLookup(container, name) {
     pg.appendChild(el("h2", {}, `Search results for "${name}"`));
     const list = el("div", { className: "lookup-results" });
     for (const r of results) {
-      const href = r.kind === "function" ? buildHash(`/functions/${encodeURIComponent(r.name)}`) : r.kind === "type" || r.kind === "typedef" ? buildHash(`/types/${encodeURIComponent(r.name)}`) : r.kind === "enum" ? buildHash(`/constants/enum/${encodeURIComponent(r.name)}`) : buildHash(`/constants/${encodeURIComponent(r.name)}`);
       const row = el("div", { className: "lookup-result-item" });
       row.appendChild(badge(r.kind, `search-badge-${r.kind === "constant" ? "const" : r.kind}`));
-      row.appendChild(el("a", { href, className: "xref" }, r.name));
+      row.appendChild(el("a", { href: buildHash(entityHref(r)), className: "xref" }, r.name));
       list.appendChild(row);
     }
     pg.appendChild(list);
